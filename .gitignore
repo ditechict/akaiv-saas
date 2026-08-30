@@ -1,0 +1,21 @@
+# Legacy documents (filenames too long for Windows git)
+myarchivesonline.com/public/documents/
+myarchivesonline.com/vendor/
+myarchivesonline.com/storage/logs/
+myarchivesonline.com/storage/framework/sessions/
+myarchivesonline.com/storage/framework/views/
+myarchivesonline.com/storage/framework/cache/
+
+# SaaS vendor (will be created in container)
+akaiv-saas/vendor/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

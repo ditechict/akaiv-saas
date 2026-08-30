@@ -1,0 +1,188 @@
+services:
+  # ------------------------------
+  # PHP 8.3 FPM — Laravel 11 App
+  # ------------------------------
+  php:
+    build:
+      context: ./docker/php
+      dockerfile: Dockerfile
+    image: akaiv/php:8.3-fpm
+    container_name: akaiv-php
+    user: "1000:1000"
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www:delegated
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - akaiv
+    depends_on:
+      - pgsql
+      - redis
+      - meilisearch
+      - clamav
+
+  # ------------------------------
+  # Caddy 2 — Web Server (HTTPS / HTTP2)
+  # ------------------------------
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: akaiv-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./:/var/www:delegated
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - akaiv
+    depends_on:
+      - php
+
+  # ------------------------------
+  # PostgreSQL 16 — Database
+  # ------------------------------
+  pgsql:
+    image: postgres:16-alpine
+    container_name: akaiv-pgsql
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-akaiv}
+      POSTGRES_USER: ${DB_USERNAME:-akaiv}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-akaiv_ChangeMe_2026!}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - pgsql_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - akaiv
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-akaiv}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------
+  # Redis 7 — Cache, Queues, Sessions, Rate Limiting
+  # ------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: akaiv-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-akaiv_redis_ChangeMe!}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - akaiv
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-akaiv_redis_ChangeMe!}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------
+  # Meilisearch — Full-Text Search Engine
+  # ------------------------------
+  meilisearch:
+    image: getmeili/meilisearch:v1.8
+    container_name: akaiv-meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: ${MEILISEARCH_KEY:-akaiv_master_ChangeMe!}
+      MEILI_ENV: production
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - meili_data:/meili_data
+    ports:
+      - "7700:7700"
+    networks:
+      - akaiv
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--spider", "http://localhost:7700/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------
+  # ClamAV — Anti-Virus for all uploads
+  # ------------------------------
+  clamav:
+    image: clamav/clamav:1.3
+    container_name: akaiv-clamav
+    restart: unless-stopped
+    environment:
+      - CLAMAV_NO_CLAMD=FALSE
+      - CLAMAV_NO_FRESHCLAMD=FALSE
+    volumes:
+      - clamav_data:/var/lib/clamav
+    ports:
+      - "3310:3310"
+    networks:
+      - akaiv
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'PING' | nc -w 2 localhost 3310 | grep -q 'PONG'"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+
+  # ------------------------------
+  # Laravel Horizon — Queue Dashboard
+  # ------------------------------
+  horizon:
+    build:
+      context: ./docker/php
+      dockerfile: Dockerfile
+    image: akaiv/php:8.3-fpm
+    container_name: akaiv-horizon
+    user: "1000:1000"
+    restart: unless-stopped
+    command: php artisan horizon
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www:delegated
+    networks:
+      - akaiv
+    depends_on:
+      - pgsql
+      - redis
+      - php
+
+  # ------------------------------
+  # Laravel Scheduler (cron replacement in Docker)
+  # ------------------------------
+  scheduler:
+    build:
+      context: ./docker/php
+      dockerfile: Dockerfile
+    image: akaiv/php:8.3-fpm
+    container_name: akaiv-scheduler
+    user: "1000:1000"
+    restart: unless-stopped
+    command: ["sh", "-c", "while [ true ]; do php /var/www/artisan schedule:run --verbose --no-interaction & sleep 60; done"]
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www:delegated
+    networks:
+      - akaiv
+    depends_on:
+      - pgsql
+      - redis
+
+networks:
+  akaiv:
+    driver: bridge
+
+volumes:
+  pgsql_data:
+  redis_data:
+  meili_data:
+  clamav_data:
+  caddy_data:
+  caddy_config:
