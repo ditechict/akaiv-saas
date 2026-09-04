@@ -27,8 +27,8 @@
         "league/flysystem-aws-s3-v3": "^3.0",
         "aws/aws-sdk-php": "^3.320",
         "php-http/guzzle7-adapter": "^1.0",
-        "rogervila/php-clamav-scan": "^5.0",
-        "thiagoprz/eloquent-tesseract-ocr": "^1.0",
+        "xenolope/quahog": "^3.0",
+        "thiagoalessio/tesseract_ocr": "^2.13",
         "blade-ui-kit/blade-heroicons": "^2.4"
     },
     "require-dev": {

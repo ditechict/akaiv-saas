@@ -8,6 +8,20 @@ return new class extends Migration
 {
     public function up(): void
     {
+        Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->string('email')->unique();
+            $table->timestamp('email_verified_at')->nullable();
+            $table->string('password');
+            $table->rememberToken();
+            $table->string('profile_photo_path')->nullable();
+            $table->string('timezone', 80)->default('Africa/Lagos');
+            $table->string('language', 10)->default('en');
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
         Schema::create('organizations', function (Blueprint $table) {
             $table->id();
             $table->string('name', 255);
@@ -255,5 +269,6 @@ return new class extends Migration
         Schema::dropIfExists('workspaces');
         Schema::dropIfExists('organization_user');
         Schema::dropIfExists('organizations');
+        Schema::dropIfExists('users');
     }
 };
