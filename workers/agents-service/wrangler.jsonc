@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "akaiv-agents-service",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "ALLOWED_ORIGIN": "https://akaiv.localhost"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DOCUMENT_ASSISTANT",
+        "class_name": "DocumentAssistant"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["DocumentAssistant"]
+    }
+  ]
+}
