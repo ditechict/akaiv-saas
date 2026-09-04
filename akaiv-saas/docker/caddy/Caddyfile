@@ -1,8 +1,7 @@
-{
-  # Match both HTTP and HTTPS on any local domain
-  :80 {
-    redir https://{host}{uri} permanent
-  }
+# Match both HTTP and HTTPS on any local domain
+:80 {
+  redir https://{host}{uri} permanent
+}
 
   akaiv.localhost, *.akaiv.localhost, https://akaiv.localhost {
     tls internal
@@ -25,10 +24,7 @@
     }
 
     root * /var/www/public
-    php_fastcgi php:9000 {
-      trusted_proxies static private_ranges
-    }
+    php_fastcgi php:9000
     encode zstd gzip
     file_server
-  }
 }
