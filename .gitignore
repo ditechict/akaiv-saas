@@ -23,6 +23,7 @@ Thumbs.db
 # Laravel / SaaS standard
 /vendor/
 /node_modules/
+workers/agents-service/node_modules/
 /public/build/
 /public/hot/
 /storage/*.key

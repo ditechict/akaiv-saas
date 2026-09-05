@@ -19,5 +19,9 @@ return [
             'host' => env('MEILISEARCH_HOST', 'http://localhost:7700'),
             'key' => env('MEILISEARCH_KEY'),
         ],
+        'document_agent' => [
+            'url' => env('DOCUMENT_AGENT_URL'),
+            'secret' => env('DOCUMENT_AGENT_SECRET'),
+        ],
     ],
 ];

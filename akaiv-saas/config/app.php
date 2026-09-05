@@ -51,6 +51,7 @@ return [
         Filament\FilamentServiceProvider::class,
         BezhanSalleh\FilamentShield\FilamentShieldServiceProvider::class,
         App\Providers\AppServiceProvider::class,
+        App\Providers\Filament\AdminPanelProvider::class,
     ],
     'aliases' => [
         'App' => Illuminate\Support\Facades\App::class,
