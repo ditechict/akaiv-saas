@@ -1,0 +1,32 @@
+- Objective: Fix Docker permissions, then run ALL commands inside Docker container (bypasses host PHP issues)
+- Root Cause: Host PHP missing extensions + security advisories; Docker image has everything needed
+- Execution Workflow:
+  1. [FIX DOCKER PERMISSIONS - RUN AS ROOT]
+     sudo chown root:docker /var/run/docker.sock
+     sudo chmod 660 /var/run/docker.sock
+     # Verify: docker version
+  2. [RUN COMPOSER INSTALL IN CONTAINER - BYPASSES HOST ISSUES]
+     docker run --rm -v "$(pwd):/app" -w /app composer:2.7 composer install --no-interaction --prefer-dist --ignore-platform-reqs
+  3. [ENVIRONMENT SETUP]
+     cp .env.example .env
+     docker run --rm -v "$(pwd):/app" -w /app --user 1000:1000 php:8.3-cli-alpine php artisan key:generate --force
+  4. [START CONTAINERS]
+     docker compose up -d --build
+     sleep 60
+     docker ps
+  4. [ALL LARAVEL COMMANDS IN CONTAINER]
+     docker exec akaiv-php php artisan migrate --force
+     docker exec akaiv-php php artisan vendor:publish --tag=activitylog-migrations --force
+     docker exec akaiv-php php artisan vendor:publish --tag=permission-migrations --force
+     docker exec akaiv-php php artisan vendor:publish --tag=medialibrary-migrations --force
+     docker exec akaiv-php php artisan vendor:publish --tag=tags-migrations --force
+     docker exec akaiv-php php artisan migrate --force
+     docker exec akaiv-php php artisan shield:install --fresh
+     docker exec -it akaiv-php php artisan make:filament-user
+     # Email: admin@myarchivesonline.com
+- Success Criteria:
+  - docker ps shows 8/8 healthy
+  - migrate:status all Ran
+  - Shield installed
+  - SuperAdmin created
+  - /admin accessible
