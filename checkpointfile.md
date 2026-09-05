@@ -236,3 +236,27 @@ When resuming:
 3. Then goal: Legacy migration + QA testing — budget 60,000
 
 End of checkpoint file. Resume at **Section 2, P0 Item 1** (docker install sequence) on next session. And initiate an Auto-pause at 85% budget trigger to create checkpoint format v1:** Mandatory structured per project protocol (just like this same checkpoint file your just read.
+
+---
+
+## 5. CODEX HANDOFF — GIT PUSH BLOCKED BY OVERSIZED WORKER DEPENDENCY
+
+**Date:** 2026-09-05  
+**Status:** In progress; local history cleanup is required before pushing.
+
+### Diagnosis
+
+GitHub rejected `main` because an unpushed commit tracks the generated Cloudflare Workers dependency tree under `workers/agents-service/node_modules/`. In particular:
+
+`workers/agents-service/node_modules/@cloudflare/workerd-linux-64/bin/workerd` is 118.77 MB, above GitHub's 100 MB per-file limit.
+
+The whole `node_modules` directory is generated and must not be committed. Removing the file only from the working tree is insufficient because it remains in the unpushed commit history.
+
+### Fix performed/planned
+
+1. Added `workers/agents-service/node_modules/` to the root `.gitignore`.
+2. Rewrite only commits after `origin/main` to remove the tracked worker `node_modules` tree from every affected commit; do not rewrite the existing remote history.
+3. Verify no worker dependency files remain tracked and run `git push --dry-run origin main:main`.
+4. Push the rewritten local branch normally after the dry run succeeds.
+
+The earlier local Git LFS hook was stale; Git LFS is not a substitute for committing generated `node_modules`. Do not add this dependency tree to LFS. Install it with `npm install` in `workers/agents-service/` when needed.
