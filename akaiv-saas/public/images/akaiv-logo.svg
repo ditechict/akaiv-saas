@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 64" role="img" aria-labelledby="title">
+  <title>AKAIV Archives</title>
+  <rect width="64" height="64" rx="12" fill="#1e3a8a"/>
+  <path fill="#fff" d="M16 47 29 17h7l13 30h-8l-3-8H27l-3 8h-8Zm14-15h6l-3-8-3 8Z"/>
+  <text x="80" y="42" fill="#0f172a" font-family="Georgia, serif" font-size="28" font-weight="700">AKAIV Archives</text>
+</svg>

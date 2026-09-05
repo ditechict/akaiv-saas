@@ -1,0 +1,42 @@
+@import url('../../../../vendor/filament/filament/resources/css/theme.css');
+
+@config '../../../../tailwind.config.js';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    --akaiv-brand-primary: #1e3a8a;
+    --akaiv-brand-accent: #0ea5e9;
+    --akaiv-focus-ring: #2563eb;
+}
+
+@layer base {
+    :focus-visible {
+        outline: 2px solid var(--akaiv-focus-ring);
+        outline-offset: 2px;
+    }
+}
+
+@layer components {
+    .fi-btn,
+    .fi-icon-btn {
+        min-height: 2.75rem;
+    }
+
+    .akaiv-skip-link {
+        @apply sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-white focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-brand-900 focus:shadow-card;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+    }
+}

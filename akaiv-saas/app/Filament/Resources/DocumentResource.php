@@ -33,17 +33,17 @@ class DocumentResource extends Resource
     {
         return $form->schema([
             Section::make('Document metadata')->schema([
-                TextInput::make('friendly_name')->required()->maxLength(500),
-                TextInput::make('original_filename')->required()->maxLength(500),
-                TextInput::make('folio_number')->maxLength(200),
-                Textarea::make('description')->columnSpanFull(),
+                TextInput::make('friendly_name')->label('Document name')->required()->maxLength(500),
+                TextInput::make('original_filename')->label('Original filename')->required()->maxLength(500),
+                TextInput::make('folio_number')->label('Folio number')->maxLength(200),
+                Textarea::make('description')->label('Description')->helperText('Add the context needed to identify this document.')->columnSpanFull(),
                 Select::make('status')->options([
                     'draft' => 'Draft',
                     'published' => 'Published',
                     'archived' => 'Archived',
                     'quarantined' => 'Quarantined',
                 ])->required(),
-                DatePicker::make('retention_date'),
+                DatePicker::make('retention_date')->label('Retention review date'),
             ])->columns(2),
             Section::make('File')->schema([
                 FileUpload::make('storage_path')
@@ -100,7 +100,11 @@ class DocumentResource extends Resource
                     ->openUrlInNewTab()
                     ->visible(fn (Document $record): bool => $record->virus_scanned && ! $record->virus_found && $record->status !== 'deleted'),
                 EditAction::make(),
-                DeleteAction::make()->requiresConfirmation(),
+                DeleteAction::make()
+                    ->label('Move to trash')
+                    ->modalHeading('Move document to trash?')
+                    ->modalDescription('The document will be hidden from active lists but retained for recovery according to your organization policy.')
+                    ->requiresConfirmation(),
             ])
             ->bulkActions([]);
     }
