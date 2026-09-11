@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+defaults:
+  run:
+    working-directory: akaiv-saas
+
+jobs:
+  laravel:
+    name: Laravel (Pint + Pest)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: akaiv_test
+          POSTGRES_USER: akaiv
+          POSTGRES_PASSWORD: akaiv
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U akaiv"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, intl, pdo_pgsql, bcmath, exif, pcntl, zip, gd, redis
+          coverage: none
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: akaiv-saas/vendor
+          key: composer-${{ hashFiles('akaiv-saas/composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Check code style
+        run: vendor/bin/pint --test
+
+      - name: Run tests
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: akaiv_test
+          DB_USERNAME: akaiv
+          DB_PASSWORD: akaiv
+          REDIS_HOST: 127.0.0.1
+          REDIS_PASSWORD: null
+        run: vendor/bin/pest --colors=always
+
+  worker:
+    name: Cloudflare Worker (typecheck + test)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: workers/agents-service
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
