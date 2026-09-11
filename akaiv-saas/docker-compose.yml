@@ -133,6 +133,30 @@ services:
       start_period: 120s
 
   # ------------------------------
+  # Dev HTTP server — browser testing from Codespaces
+  # (bypasses Caddy TLS/custom-domain so Codespace port forwarding works)
+  # ------------------------------
+  serve:
+    build:
+      context: ./docker/php
+      dockerfile: Dockerfile
+    image: akaiv/php:8.3-fpm
+    container_name: akaiv-serve
+    user: "1000:1000"
+    restart: unless-stopped
+    command: php artisan serve --host=0.0.0.0 --port=8000
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www:delegated
+    ports:
+      - "8000:8000"
+    networks:
+      - akaiv
+    depends_on:
+      - pgsql
+      - redis
+
+  # ------------------------------
   # Laravel Horizon — Queue Dashboard
   # ------------------------------
   horizon:
