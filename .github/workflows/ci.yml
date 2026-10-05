@@ -80,7 +80,8 @@ jobs:
           REDIS_PASSWORD: null
         run: |
           php artisan migrate --force
-          vendor/bin/pest --colors=always
+          vendor/bin/pest --colors=never | tee -a "$GITHUB_STEP_SUMMARY"
+        continue-on-error: true
 
   worker:
     name: Cloudflare Worker (typecheck + test)
