@@ -26,6 +26,18 @@ return [
             'search_path' => 'public',
             'sslmode' => 'prefer',
         ],
+        'legacy_mysql' => [
+            'driver' => 'mysql',
+            'host' => env('LEGACY_DB_HOST', '127.0.0.1'),
+            'port' => env('LEGACY_DB_PORT', '3306'),
+            'database' => env('LEGACY_DB_DATABASE', 'earlvzhc_archive'),
+            'username' => env('LEGACY_DB_USERNAME', 'earlvzhc_archive'),
+            'password' => env('LEGACY_DB_PASSWORD', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'strict' => true,
+        ],
     ],
     'migrations' => [
         'table' => 'migrations',
