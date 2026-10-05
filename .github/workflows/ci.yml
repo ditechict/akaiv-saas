@@ -78,7 +78,9 @@ jobs:
           DB_PASSWORD: akaiv
           REDIS_HOST: 127.0.0.1
           REDIS_PASSWORD: null
-        run: vendor/bin/pest --colors=always
+        run: |
+          php artisan migrate --force
+          vendor/bin/pest --colors=always
 
   worker:
     name: Cloudflare Worker (typecheck + test)
