@@ -132,13 +132,13 @@
 
 ### 6. Known Gaps, Technical Debt & Immediate Roadmap
 - **Unfinished / In-Progress Tasks:**
-  - Host Git installation timed out during download via winget (`0x80072ee2: InternetReadFile() failed`).
   - Staging / Production Docker cluster has not yet been booted.
   - Legacy MySQL database password (`earlvzhc_archive`) in `myarchivesonline.com/.env` remains un-rotated at hosting provider.
 - **Immediate Next Action:**
-  - **Make Git available on the host or push via Codespaces / SSH:** Once Git is available, commit the newly linked `.env` and push to `origin/main` to trigger the GitHub Actions CI/CD pipeline (`.github/workflows/ci.yml`).
+  - **Container Cluster Boot:** Execute `docker compose up -d --build` on target staging environment.
 - **Subsequent Milestones:**
-  1. *CI/CD Green Light:* Let `.github/workflows/ci.yml` run PHP 8.3 + PostgreSQL 16 + Redis test matrix and Pint linter.
-  2. *Container Cluster Boot:* Execute `docker compose up -d --build` on target staging environment.
-  3. *Migrations & SuperAdmin:* Execute `php artisan migrate --force` and `php artisan shield:install --fresh`, then create SuperAdmin user.
-  4. *Security Pre-Flight & Migration Dry-Run:* Rotate `earlvzhc_archive` MySQL password at hosting provider, then execute `php artisan app:migrate-legacy-documents --dry-run`.
+  - [x] **Git Host Availability:** Configured MinGit portable at `AppData\Local\Programs\Git\cmd\git.exe`.
+  - [x] **GitHub Push & CI/CD Green Light:** Pushed to `origin/main` (commit `e45a907`). GitHub Actions workflow [Run #37253859180](https://github.com/ditechict/akaiv-saas/actions/runs/37253859180) passed 100% across both `Laravel (Pint + Pest)` and `Cloudflare Worker (typecheck + test)`.
+  1. *Container Cluster Boot:* Execute `docker compose up -d --build` on target staging environment.
+  2. *Migrations & SuperAdmin:* Execute `php artisan migrate --force` and `php artisan shield:install --fresh`, then create SuperAdmin user.
+  3. *Security Pre-Flight & Migration Dry-Run:* Rotate `earlvzhc_archive` MySQL password at hosting provider, then execute `php artisan app:migrate-legacy-documents --dry-run`.
