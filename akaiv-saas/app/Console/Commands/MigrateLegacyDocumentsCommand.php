@@ -52,6 +52,12 @@ class MigrateLegacyDocumentsCommand extends Command
                 $failures->push((string)$file . ' | skipped: PHP executable');
                 continue;
             }
+
+            $normalizedPath = strtolower(str_replace('\\', '/', $file->getPathname()));
+            if (str_contains($normalizedPath, '/trash/') || str_contains($normalizedPath, '/recycled/')) {
+                continue;
+            }
+
             $total++;
 
             $relPath = Str::after(str_replace('\\', '/', $file->getPathname()), $legacyRoot . '/');

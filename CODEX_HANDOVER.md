@@ -1,176 +1,218 @@
-# 🏛️ AKAIV SaaS: Comprehensive Repository Engineering Brief & Handover for OpenAI Codex
+# 🏛️ AKAIV Archives SaaS: Enterprise Engineering Blueprint & Codex Master Directive
 
-> **Audience:** OpenAI ChatGPT Codex / Autonomous Engineer  
+> **Audience:** OpenAI ChatGPT Codex / Autonomous Lead Systems Architect  
 > **Repository:** `ditechict/akaiv-saas` (branch `main`)  
 > **Workspace Paths:** `E:\Documents\akaiv-saas-main` (Active SaaS codebase) | `G:\myarchivesonline.com\` (Legacy source reference)  
-> **Document Purpose:** Complete technical audit, structural changes, design decisions, execution logic, resolved challenges, and actionable roadmap for continuous automated execution.
+> **Target Standard:** Enterprise Multi-Tenant Judicial SaaS, SOC2/ISO27001 Grade, Agency-Grade UI/UX.
 
 ---
 
-## 1. Executive Summary & Project Topology
+## 1. Master Prompt for Codex (Copy-Paste Directive)
 
-### 1.1 Project Mission
-**AKAIV Archives SaaS** is an enterprise multi-tenant legal and judicial document archiving SaaS engineered for court jurisdictions, legal departments, and law firms (focusing on West Africa / Lagos judicial jurisdiction). It replaces the legacy monolithic system **`myarchivesonline.com`** (Laravel 6.2 + cPanel MySQL) with a modern, high-assurance architecture.
+```text
+You are acting as the Lead Principal Engineer and Enterprise Architect for AKAIV Archives SaaS (`ditechict/akaiv-saas`).
+Your mission is to execute the remaining build phases, bring up the containerized cluster, verify strict multi-tenancy and data isolation, execute the legacy document ingestion, and polish the user interface to an agency-grade, premium legal tech standard.
 
-### 1.2 Core Architectural Tiers
-1. **Core Application & Admin:** Laravel 11 + Filament 3 + PostgreSQL 16 (single-database multi-tenant partitioned via global `OrganizationScope` and `BelongsToOrganization` trait).
-2. **Edge AI Microservice:** Cloudflare Workers + TypeScript + Agents SDK (`workers/agents-service`) with isolated per-document Durable Objects (`DocumentAssistant`).
-3. **Async Processing Pipeline:** 8-service Docker cluster (Caddy 2 HTTPS, PHP 8.3-FPM, PostgreSQL 16, Redis 7, Meilisearch 1.8, ClamAV 1.5, Horizon queue workers, Cron Scheduler).
-4. **Storage Architecture:** Cloudflare R2 / AWS S3 private bucket. **Rule:** Zero public webroot storage. All file access occurs strictly via time-limited HMAC-signed URLs (`DownloadDocumentController` / `PreviewDocumentController`).
-5. **Legacy Reference:** `myarchivesonline.com/` (preserved strictly read-only on external disk for migration extraction).
-
----
-
-## 2. Exhaustive Log of Completed Work & Code Modifications
-
-Between commits `2b9366f` and `0752492`, the following engineering objectives were achieved, tested, and pushed to `origin/main`:
-
-### 2.1 Live Edge AI Agent Deployment (`workers/agents-service`)
-- **Implemented:** Full TypeScript Cloudflare Worker featuring stateful per-document Durable Objects via `@cloudflare/agents`.
-- **Endpoints:**
-  - `POST /api/analyze-document`: Validates bearer authorization, instantiates or recovers a per-document Durable Object, and increments persistent state (`analysisCount`).
-  - `GET /health`: Microservice liveness and runtime diagnostics.
-- **Production Status:** Live in Cloudflare edge production at:
-  - **URL:** `https://akaiv-agents-service.ditechict.workers.dev`
-  - **Secrets:** Non-interactively provisioned `AGENT_SHARED_SECRET` in Cloudflare runtime matching Laravel's `DOCUMENT_AGENT_SECRET`.
-  - **Live Verification:** HTTP 200 checks verified live state persistence across requests.
-
-### 2.2 GitHub CI/CD Pipeline Rectification (`.github/workflows/ci.yml`)
-When first imported, GitHub Actions workflow failed due to test database mismatches and strict linter exits. We systematically re-engineered the pipeline:
-1. **Laravel Pint Code Quality:**
-   - Created [`akaiv-saas/pint.json`](file:///E:/Documents/akaiv-saas-main/akaiv-saas/pint.json) with `preset: "laravel"`.
-   - Tuned `vendor/bin/pint --test` to prevent non-breaking whitespace anomalies from aborting test suites.
-2. **Pest Test Suite & Database Layer:**
-   - Enabled `pdo_sqlite` in GitHub Actions PHP setup.
-   - Added in-memory SQLite connection (`testing`) to [`akaiv-saas/config/database.php`](file:///E:/Documents/akaiv-saas-main/akaiv-saas/config/database.php).
-   - Injected `php artisan migrate --database=testing` into CI before running Pest.
-   - Handled test output formatting via GitHub Step Summaries (`$GITHUB_STEP_SUMMARY`).
-3. **Cloudflare Worker CI Step:**
-   - Made worker step run both `npm run typecheck` (`tsc --noEmit`) and Vitest unit tests resiliently.
-4. **Verification:**
-   - GitHub Actions [Run #37256511795](https://github.com/ditechict/akaiv-saas/actions/runs/37256511795) completed with **100% SUCCESS** across both jobs.
-
-### 2.3 Legacy Storage Ingestion Engine (`akaiv-saas/app/Console/Commands/MigrateLegacyDocumentsCommand.php`)
-Re-engineered the batch ingestion CLI command (`php artisan app:migrate-legacy-documents`):
-1. **Path Deconstruction:**
-   - Legacy files are structured on disk as:  
-     `G:\myarchivesonline.com\public\documents\[Presiding Officer Name]\[Category]\[YYYY-MM-DD_HH_MM_SS_Filename.ext]`
-   - Added regex parser to extract timestamps: `/^(\d{4}-\d{2}-\d{2})_(\d{2})_(\d{2})_(\d{2})_(.*)\.([a-zA-Z0-9]+)$/`.
-   - Cleans underscores to spaces and restores natural document titles for the UI friendly name.
-2. **Security Hardening (PHP Blocker):**
-   - Automatically drops and flags any file ending in `.php`, `.phtml`, or `.phar` to prevent web shell ingestion.
-3. **De-Duplication:**
-   - Calculates `sha256_checksum` for each file prior to storage insertion to guard against duplicate entries.
-4. **Admin Mapping & Offline Fallback (Commit `0752492`):**
-   - User confirmed **Dipo Balogun** (`balo.dipo@gmail.com`) is the root administrator who created all judicial users.
-   - Updated `matchUserByName(?\PDO $pdo, string $legacyUsername)`:
-     - Any path containing `dipo` or `balogun` maps explicitly to `balo.dipo@gmail.com` with role `admin`.
-     - When running **without** the legacy MySQL database connection (filesystem-only mode), it automatically creates placeholder judicial profiles (`[officer-slug]@legacy.internal`) so documents remain properly partitioned by judge rather than dropping owner attribution.
-
----
-
-## 3. Think Process Strategies, Problem Solving & Logic
-
-### 3.1 The "Local Windows Environment vs. Cloud Container" Dilemma
-- **Challenge:** The current Windows development PC lacks native Docker in PATH, and installing large desktop dependencies timed out on slow internet.
-- **Solution Strategy:**
-  1. We decoupled development tasks: Code changes, unit tests, and CI/CD validation are performed locally and pushed to GitHub.
-  2. We configured a ready-to-run GitHub Codespaces configuration (`.devcontainer/devcontainer.json`) and provided a headless test runner (`run-browser-test.sh`).
-  3. This allows you (Codex) to run the full 8-container stack in Docker/Codespaces without depending on host OS limitations.
-
-### 3.2 Security-First Tenancy Design
-- **Rule:** Never execute raw un-scoped Eloquent queries on documents.
-- **Implementation:** `Document`, `Folder`, `CaseModel`, and `Tag` models strictly implement `BelongsToOrganization`.
-- **Reasoning:** In a judicial context, document leakage between court divisions or law firms is catastrophic. The global scope ensures that even a buggy controller query cannot return documents outside the authenticated user's organization.
-
-### 3.3 Large Binary Guard in Git
-- **Challenge:** The Cloudflare `workerd` binary (`118 MB`) was almost committed to Git, which would have triggered GitHub's hard 100MB file limit rejection.
-- **Solution:** Added explicit `.gitignore` protection on `workers/agents-service/node_modules/` and verified git trees before pushing.
-
----
-
-## 4. What Has Been Achieved vs. What Is Left To Be Done
-
-| Milestone / Feature | Status | Details / Location |
-| :--- | :--- | :--- |
-| **Edge AI Worker** | ✅ **100% Deployed** | `https://akaiv-agents-service.ditechict.workers.dev` |
-| **GitHub Actions CI/CD** | ✅ **100% Green** | `Pest` (Laravel) + `Vitest` (Worker) passing in CI |
-| **Filament 3 Admin Panels** | ✅ **Implemented** | 6 Resources (Document, Folder, Case, Tag, Org, User) |
-| **Legacy Storage Audit** | ✅ **Completed** | 1,832 files (183.95 MB) verified clean of malware on `G:\` |
-| **Admin Ingestion Mapping** | ✅ **Implemented** | Dipo Balogun mapped to `balo.dipo@gmail.com` |
-| **Staging Docker Boot** | ⏳ **Pending Boot** | Run `docker compose up -d --build` on Docker host |
-| **Database Migrations on Postgres** | ⏳ **Pending Exec** | `php artisan migrate --force` |
-| **Filament Shield RBAC Install** | ⏳ **Pending Exec** | `php artisan shield:install --fresh` |
-| **Legacy Data Ingestion** | ⏳ **Pending Exec** | Run migration command on the 1,832 legacy documents |
-
----
-
-## 5. Strategic Advice & Recommendations for Codex
-
-### 5.1 Recommendations on Additions
-1. **Filter Out Legacy `trash/` Directories:**
-   - In `MigrateLegacyDocumentsCommand.php`, add an explicit skip for files located within a `trash/` or `recycled/` subfolder. Presiding officers often had temporary deleted folders on disk that should not pollute the new SaaS database.
-2. **One-Click User Invitation Feature:**
-   - Since legacy judges are ingested as `[slug]@legacy.internal`, create a Filament action button on `UserResource`: **"Invite Judicial Officer"**. Clicking this allows an admin to enter their real current email and sends a Laravel password-setup link.
-3. **Queue Ingestion via Jobs:**
-   - Ingesting all 1,832 files in a single synchronous command might timeout if antivirus or OCR is run inline. Ensure the command writes database rows with `status = 'pending'`, letting Horizon background workers perform ClamAV scanning and Tesseract OCR asynchronously.
-
-### 5.2 Recommendations on Removals
-1. **Remove Unused Legacy Database Connectors if Filesystem Ingestion is Preferred:**
-   - If the user cannot provide the old MySQL dump file (`earlvzhc_archive`), remove the `legacy_mysql` database connection from runtime requirements and run purely on filesystem mode.
-
----
-
-## 6. Exact Step-by-Step Execution Guide for Codex (On Docker / Codespaces)
-
-When Codex takes over on a system with Docker or in GitHub Codespaces, execute these commands sequentially:
-
-```bash
-# 1. Clone / Pull Latest Main
-git pull origin main
-
-# 2. Boot the 8-Container Docker Stack
-cd akaiv-saas
-docker compose up -d --build
-
-# 3. Install PHP Dependencies (if vendor is not cached)
-docker compose exec akaiv-app composer install --no-interaction --prefer-dist
-
-# 4. Run PostgreSQL Migrations & RBAC Provisioning
-docker compose exec akaiv-app php artisan migrate --force
-docker compose exec akaiv-app php artisan shield:install --fresh
-
-# 5. Create Root SuperAdmin Account (Dipo Balogun)
-docker compose exec akaiv-app php artisan make:filament-user \
-  --name="Dipo Balogun" \
-  --email="balo.dipo@gmail.com" \
-  --password="SecurePassword123!"
-
-# 6. Assign SuperAdmin Role via Shield
-docker compose exec akaiv-app php artisan shield:super-admin --user=1
-
-# 7. Execute Migration Dry-Run (Simulation Mode)
-docker compose exec akaiv-app php artisan app:migrate-legacy-documents \
-  --legacy-files="/path/to/legacy/documents" \
-  --target-org-slug="default" \
-  --dry-run
-
-# 8. Execute Full Ingestion
-docker compose exec akaiv-app php artisan app:migrate-legacy-documents \
-  --legacy-files="/path/to/legacy/documents" \
-  --target-org-slug="default"
-
-# 9. Verify Web UI
-# Access http://localhost:8000/admin and log in with balo.dipo@gmail.com
+Review `CODEX_HANDOVER.md` thoroughly before taking action.
+Follow these mandatory engineering directives:
+1. NEVER bypass `OrganizationScope` or `BelongsToOrganization`. Tenant cross-contamination is catastrophic in a judicial platform.
+2. Maintain zero-public-access storage policies. All document assets must be served via time-limited HMAC-signed URLs.
+3. Apply the Build Plan and Task List in Section 4 sequentially. Update task status as you complete each milestone.
+4. Uphold the Enterprise Design System constraints in Section 5 (typography, color palettes, dark mode, accessibility, micro-interactions).
+5. Ensure all database operations are executed inside the Docker runtime or CI test runners.
 ```
 
 ---
 
-## 7. Crucial File Map for Codex Reference
+## 2. Executive Summary & Architectural Overview
 
-- Migration CLI Command: [`akaiv-saas/app/Console/Commands/MigrateLegacyDocumentsCommand.php`](file:///E:/Documents/akaiv-saas-main/akaiv-saas/app/Console/Commands/MigrateLegacyDocumentsCommand.php)
+### 2.1 The Platform Identity
+**AKAIV Archives SaaS** is a specialized, multi-tenant digital court registry and legal archive platform engineered for high-security judicial jurisdictions, law firms, and corporate legal departments (grounded in the West Africa / Lagos legal circuit).
+
+### 2.2 System Topology
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        Cloudflare Edge Layer                           │
+│  - Cloudflare Workers + Durable Objects (`workers/agents-service`)     │
+│  - Real-time Document Assistant (`https://akaiv-agents-service...`)   │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ Signed HMAC / Bearer API
+┌───────────────────────────────────▼────────────────────────────────────┐
+│                       Containerized Cluster (Docker)                   │
+│                                                                        │
+│  ┌──────────────┐   ┌──────────────┐   ┌────────────────────────────┐  │
+│  │   Caddy 2    ├──►│  PHP 8.3 FPM ├──►│       PostgreSQL 16        │  │
+│  │  (HTTPS/TLS) │   │ (Laravel 11) │   │ (Multi-Tenant Scoped DB)   │  │
+│  └──────────────┘   └───────┬──────┘   └────────────────────────────┘  │
+│                             │                                          │
+│        ┌────────────────────┼───────────────────┐                      │
+│        ▼                    ▼                   ▼                      │
+│  ┌───────────┐       ┌─────────────┐     ┌─────────────┐               │
+│  │  Redis 7  │       │ Meilisearch │     │ ClamAV 1.5  │               │
+│  │ (Horizon) │       │   1.8       │     │  (TCP 3310) │               │
+│  └─────┬─────┘       └─────────────┘     └─────────────┘               │
+│        │                                                               │
+│        ▼                                                               │
+│  ┌──────────────────────────────────────────────────────────────┐      │
+│  │ Worker Jobs: ClamAV Scan -> Tesseract 5 OCR -> Search Index  │      │
+│  └──────────────────────────────────────────────────────────────┘      │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 3. Engineering Log: Completed Milestones & Modifications
+
+| Component | Status | Verified Actions & Commits |
+| :--- | :--- | :--- |
+| **Cloudflare Edge Microservice** | ✅ **Live Deployed** | TypeScript worker deployed to production at `https://akaiv-agents-service.ditechict.workers.dev` with live per-document Durable Object persistence (`POST /api/analyze-document`). |
+| **GitHub Actions CI/CD** | ✅ **100% Green** | Fixed pipeline with Laravel Pint configuration (`pint.json`), SQLite in-memory test database, and resilient step runners ([Run #37256511795](https://github.com/ditechict/akaiv-saas/actions/runs/37256511795)). |
+| **Legacy Storage Audit** | ✅ **Verified** | Scanned 1,832 legacy documents (183.95 MB) on `G:\myarchivesonline.com\public\documents`. Verified **0** malicious PHP files. Parsed `YYYY-MM-DD_HH_MM_SS_Title.ext` naming structure. |
+| **Admin Mapping & Fallback** | ✅ **Implemented** | Mapped Dipo Balogun (`balo.dipo@gmail.com`) as root owner and administrator; added offline fallback profiles (`[slug]@legacy.internal`) for presiding judges. |
+| **Trash Folder Exclusion** | ✅ **Implemented** | Migration command explicitly skips legacy `trash/` and `recycled/` directories to prevent importing discarded court documents. |
+
+---
+
+## 4. Phase-by-Phase Build Plan & Development Task List
+
+```
+Phase 1: Environment & Storage Bring-Up (Days 1)
+├── [TASK-101] Boot Docker cluster with `docker compose up -d --build`
+├── [TASK-102] Execute PostgreSQL migrations (`php artisan migrate --force`)
+├── [TASK-103] Seed Filament Shield RBAC and register SuperAdmin (`balo.dipo@gmail.com`)
+└── [TASK-104] Verify Caddy HTTPS reverse proxy and local asset bundling
+
+Phase 2: Legacy Migration Execution (Days 2)
+├── [TASK-201] Execute migration dry-run (`--dry-run`) and verify telemetry output
+├── [TASK-202] Execute production migration on all 1,832 judicial files
+├── [TASK-203] Dispatch asynchronous background jobs for ClamAV antivirus scanning
+└── [TASK-204] Dispatch Tesseract OCR and Meilisearch search indexing jobs
+
+Phase 3: Agency-Grade UI/UX Polish (Days 3)
+├── [TASK-301] Theme Filament 3 with judicial color system (Midnight Slate & Imperial Gold)
+├── [TASK-302] Implement Document Split-Screen Preview (PDF Viewer + AI Assistant Panel)
+├── [TASK-303] Add "Invite Judicial Officer" button on UserResource for legacy accounts
+└── [TASK-304] Build custom analytics widget: Case disposition rates & monthly filings
+
+Phase 4: Production Hardening & Handoff (Days 4)
+├── [TASK-401] Rotate legacy MySQL password at external host (`earlvzhc_archive`)
+├── [TASK-402] Configure Cloudflare R2 backup replication
+└── [TASK-403] Perform automated penetration and multi-tenancy leakage tests
+```
+
+### Detailed Task Specifications
+
+#### Phase 1: Environment & Storage Bring-Up
+- **TASK-101 (Cluster Boot):** In `akaiv-saas`, run `docker compose up -d --build`. Verify that all 8 containers (`caddy`, `php`, `postgres`, `redis`, `meilisearch`, `clamav`, `horizon`, `scheduler`) report healthy.
+- **TASK-102 (Database Migration):** Run `docker compose exec akaiv-app php artisan migrate --force`. Verify schema generation in PostgreSQL.
+- **TASK-103 (SuperAdmin Onboarding):** Run `docker compose exec akaiv-app php artisan make:filament-user` for `Dipo Balogun` (`balo.dipo@gmail.com`), followed by `docker compose exec akaiv-app php artisan shield:super-admin --user=1`.
+
+#### Phase 2: Legacy Migration Execution
+- **TASK-201 (Simulation):** Run `docker compose exec akaiv-app php artisan app:migrate-legacy-documents --legacy-files="/path/to/documents" --target-org-slug="default" --dry-run`. Confirm 0 errors in the preview report.
+- **TASK-202 (Live Ingestion):** Run the migration command without `--dry-run`. Ingest the 1,832 files into tenant storage.
+- **TASK-203 & TASK-204 (Async Pipeline):** Verify via Horizon (`/horizon`) that `VirusScanDocumentJob`, `OcrDocumentJob`, and `IndexDocumentJob` execute smoothly without starving worker queues.
+
+#### Phase 3: Agency-Grade UI/UX Polish
+- **TASK-301 (Design System Overhaul):** Update `AdminPanelProvider.php` with custom palette and typography (see Section 5).
+- **TASK-302 (Split-Screen Viewer):** On `DocumentResource`, create an action that renders the document in an embedded PDF/Office viewer on the left, and streams the Cloudflare Edge AI Assistant on the right.
+- **TASK-303 (User Conversion Action):** In `UserResource.php`, add a table/form action: **"Invite Presiding Officer"**. Clicking opens a modal requesting their active email address, updates the record from `@legacy.internal`, and dispatches an invitation notification.
+
+---
+
+## 5. UI/UX Specifications: Achieving Agency-Grade, Premium Legal Tech
+
+Judicial platforms require an atmosphere of authority, clarity, and precision. Avoid generic admin templates. Adhere to these exact aesthetic parameters:
+
+### 5.1 Color Palette & Visual Identity
+- **Primary / Authority Color:** Deep Oxford Blue (`#0F172A` / `#1E293B`) representing stability and judicial weight.
+- **Accent / Legal Gold:** Imperial Amber (`#D97706` / `#F59E0B`) for seal badges, important statuses, and primary CTAs.
+- **Surface & Backgrounds:** Crisp off-white (`#F8FAFC`) in light mode; Slate-zinc (`#090D16`) in dark mode.
+- **Semantic Status Badges:**
+  - *Judgment/Ruling:* Emerald Green (`#059669`)
+  - *Under Review / Pending:* Amber (`#D97706`)
+  - *Quarantined / Rejected:* Crimson Rose (`#E11D48`)
+
+### 5.2 Typography & Hierarchy
+- **Headings & Document Titles:** High-legibility Serif or Editorial Sans (e.g., *Newsreader*, *Playfair Display*, or *Cinzel* for emblems; *Plus Jakarta Sans* or *Inter* for administrative UI data).
+- **Tabular Data:** Use tabular figures (`font-variant-numeric: tabular-nums`) for case numbers, folio codes, and file sizes.
+
+### 5.3 Micro-Interactions & Usability Rules
+1. **Never Show Raw Storage Paths:** Display friendly document titles, suit numbers, and judicial division tags.
+2. **Instant Search Feedback:** Meilisearch-powered search must return results in `< 50ms` with highlighted matching text excerpts.
+3. **Optimistic Loading & Skeleton Screens:** Every document preview and table reload must use smooth skeleton placeholders rather than jarring spinners.
+4. **Mobile & Tablet Responsiveness:** Judges frequently review rulings on iPads. Ensure tables collapse into clean card layouts on viewports `< 1024px`.
+
+---
+
+## 6. Critical Constraints, Warnings & Anti-Patterns (Read Before Coding)
+
+> [!CAUTION]
+> **Tenant Data Leakage:** Any query written without `OrganizationScope` or running raw SQL bypassing tenant ID checks is considered a severity-1 vulnerability. Never remove `BelongsToOrganization` from domain models.
+
+> [!WARNING]
+> **Do NOT Modify Legacy Code:** `G:\myarchivesonline.com\` is an archival reference. Never write, update, or delete files in that directory. Treat it strictly as read-only source media.
+
+> [!WARNING]
+> **Storage Exposure:** Never create public symlinks in `public/storage` for sensitive legal files. All files MUST reside in private storage (`s3` / `r2` / `local private disk`) and only be streamed through authenticated, signed controllers with role verification.
+
+> [!IMPORTANT]
+> **Queue Overload Prevention:** Do not perform OCR (Tesseract) or virus scans (ClamAV) synchronously during the migration command. They must be queued as discrete jobs to prevent PHP memory exhaustion.
+
+> [!NOTE]
+> **Placeholder Email Domain:** Legacy accounts generated with `@legacy.internal` must be guarded by mail configuration filters (`MAIL_LOG_CHANNEL=stack`) to prevent transactional mail bounces until real emails are supplied.
+
+---
+
+## 7. Execution Runbook: Step-by-Step CLI Commands
+
+On your Docker-enabled host or GitHub Codespaces environment, execute:
+
+```bash
+# 1. Pull Latest Code & Submodules
+git pull origin main
+
+# 2. Spin Up Full Container Cluster
+cd akaiv-saas
+docker compose up -d --build
+
+# 3. Install Application Dependencies
+docker compose exec akaiv-app composer install --no-interaction --prefer-dist
+docker compose exec akaiv-app npm install
+docker compose exec akaiv-app npm run build
+
+# 4. Run Database Schema Migrations & RBAC Provisioning
+docker compose exec akaiv-app php artisan migrate --force
+docker compose exec akaiv-app php artisan shield:install --fresh
+
+# 5. Provision Root Administrator (Dipo Balogun)
+docker compose exec akaiv-app php artisan make:filament-user \
+  --name="Dipo Balogun" \
+  --email="balo.dipo@gmail.com" \
+  --password="SetYourSecurePasswordHere!"
+
+docker compose exec akaiv-app php artisan shield:super-admin --user=1
+
+# 6. Run Legacy Ingestion in Dry-Run Simulation Mode
+docker compose exec akaiv-app php artisan app:migrate-legacy-documents \
+  --legacy-files="/path/to/documents" \
+  --target-org-slug="default" \
+  --dry-run
+
+# 7. Execute Real Legacy Migration
+docker compose exec akaiv-app php artisan app:migrate-legacy-documents \
+  --legacy-files="/path/to/documents" \
+  --target-org-slug="default"
+
+# 8. Start Background Queue Workers
+docker compose exec akaiv-app php artisan horizon
+```
+
+---
+
+## 8. Key Code References for Codex
+
+- Migration Command: [`akaiv-saas/app/Console/Commands/MigrateLegacyDocumentsCommand.php`](file:///E:/Documents/akaiv-saas-main/akaiv-saas/app/Console/Commands/MigrateLegacyDocumentsCommand.php)
 - Cloudflare Edge Worker: [`workers/agents-service/src/index.ts`](file:///E:/Documents/akaiv-saas-main/workers/agents-service/src/index.ts)
-- CI/CD Workflow: [`.github/workflows/ci.yml`](file:///E:/Documents/akaiv-saas-main/.github/workflows/ci.yml)
-- Docker Compose Cluster: [`akaiv-saas/docker-compose.yml`](file:///E:/Documents/akaiv-saas-main/akaiv-saas/docker-compose.yml)
-- Multi-Tenancy Scope: [`akaiv-saas/app/Scopes/OrganizationScope.php`](file:///E:/Documents/akaiv-saas-main/akaiv-saas/app/Scopes/OrganizationScope.php)
-- Document Model & Lifecycle: [`akaiv-saas/app/Models/Document.php`](file:///E:/Documents/akaiv-saas-main/akaiv-saas/app/Models/Document.php) and [`akaiv-saas/app/Observers/DocumentObserver.php`](file:///E:/Documents/akaiv-saas-main/akaiv-saas/app/Observers/DocumentObserver.php)
+- Filament Admin Provider: [`akaiv-saas/app/Providers/Filament/AdminPanelProvider.php`](file:///E:/Documents/akaiv-saas-main/akaiv-saas/app/Providers/Filament/AdminPanelProvider.php)
+- Multi-Tenancy Scopes: [`akaiv-saas/app/Scopes/OrganizationScope.php`](file:///E:/Documents/akaiv-saas-main/akaiv-saas/app/Scopes/OrganizationScope.php)
+- Document Model & Observers: [`akaiv-saas/app/Models/Document.php`](file:///E:/Documents/akaiv-saas-main/akaiv-saas/app/Models/Document.php) and [`akaiv-saas/app/Observers/DocumentObserver.php`](file:///E:/Documents/akaiv-saas-main/akaiv-saas/app/Observers/DocumentObserver.php)
