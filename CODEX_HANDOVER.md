@@ -193,14 +193,15 @@ docker compose exec akaiv-app php artisan make:filament-user \
 docker compose exec akaiv-app php artisan shield:super-admin --user=1
 
 # 6. Run Legacy Ingestion in Dry-Run Simulation Mode
+# Note: The legacy documents are mounted automatically inside the container at /var/legacy_archive/public/documents
 docker compose exec akaiv-app php artisan app:migrate-legacy-documents \
-  --legacy-files="/path/to/documents" \
+  --legacy-files="/var/legacy_archive/public/documents" \
   --target-org-slug="default" \
   --dry-run
 
 # 7. Execute Real Legacy Migration
 docker compose exec akaiv-app php artisan app:migrate-legacy-documents \
-  --legacy-files="/path/to/documents" \
+  --legacy-files="/var/legacy_archive/public/documents" \
   --target-org-slug="default"
 
 # 8. Start Background Queue Workers
