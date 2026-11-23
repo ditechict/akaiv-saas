@@ -67,9 +67,9 @@
   - **DO NOT bypass `OrganizationScope`:** Multi-tenancy isolation must be preserved on all queries.
   - **DO NOT change `.env` files casually:** Secrets and keys are strictly mapped across services.
 - **Required Environment Variables:**
-  - `APP_KEY`: Laravel application encryption key (Configured in `akaiv-saas/.env`: `base64:ppeR4GjR/tAV6NISnn9Nx3emTKCq8pTFctlFTUeaLqQ=`).
+  - `APP_KEY`: Laravel application encryption key (Configured in `akaiv-saas/.env`: `REDACTED — rotation required`).
   - `DOCUMENT_AGENT_URL`: Live edge worker URL (`https://akaiv-agents-service.ditechict.workers.dev`).
-  - `DOCUMENT_AGENT_SECRET`: Shared bearer secret (`bc9631b6bf9040b3234b8edebdddd9a65ec05753623c817fe492a05b79eb1ead`).
+  - `DOCUMENT_AGENT_SECRET`: Shared bearer secret (`REDACTED — rotation required`).
   - `AGENT_SHARED_SECRET`: Cloudflare Worker runtime secret matching `DOCUMENT_AGENT_SECRET` (Already provisioned on Cloudflare).
   - `DB_CONNECTION=pgsql`, `DB_HOST=pgsql`, `DB_PORT=5432`, `DB_DATABASE=akaiv`, `DB_USERNAME=akaiv`.
   - `REDIS_HOST=redis`, `REDIS_PORT=6379`.
@@ -77,6 +77,8 @@
   - `MEILISEARCH_HOST=http://meilisearch:7700`.
 
 ---
+
+**Security status (2026-11-23).** Previously recorded application and shared service credentials were exposed in this public repository. Rotation in the application and Cloudflare runtime remains pending. Removing values here does not revoke them or remove them from Git history.
 
 ### 4. Codebase Topology & File Map
 - **Entry Points:**
