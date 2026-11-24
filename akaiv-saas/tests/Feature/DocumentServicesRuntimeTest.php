@@ -13,6 +13,9 @@ use Illuminate\Support\Facades\Storage;
 uses(Tests\TestCase::class, RefreshDatabase::class);
 
 beforeEach(function (): void {
+    if (! getenv('AKAIV_SERVICE_TESTS')) {
+        $this->markTestSkipped('Enable AKAIV_SERVICE_TESTS with ClamAV, Poppler and Tesseract available.');
+    }
     Queue::fake();
     Storage::fake('private');
 });
