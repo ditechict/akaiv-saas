@@ -24,7 +24,7 @@ function runtimeDocument(): Document
         'slug' => 'runtime-court',
         'contact_email' => 'runtime@example.test',
     ]);
-    return Document::withoutEvents(fn () => Document::create([
+    return Document::create([
         'organization_id' => $org->id,
         'friendly_name' => 'Runtime Court Record',
         'original_filename' => 'runtime.pdf',
@@ -35,7 +35,7 @@ function runtimeDocument(): Document
         'mime_type' => 'application/pdf',
         'status' => 'uploading',
         'ocr_required' => true,
-    ]));
+    ]);
 }
 
 it('scans a clean PDF using ClamAV and dispatches processing jobs', function (): void {
