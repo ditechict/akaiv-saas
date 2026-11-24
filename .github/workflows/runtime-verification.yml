@@ -43,6 +43,8 @@ jobs:
           php-version: '8.3'
           extensions: mbstring, intl, pdo_pgsql, pdo_sqlite, bcmath, exif, pcntl, zip, gd, redis, sockets
           coverage: none
+      - name: Create runtime directories
+        run: mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
       - run: composer install --no-interaction --prefer-dist --no-progress
       - name: Prepare isolated environment
         run: |
