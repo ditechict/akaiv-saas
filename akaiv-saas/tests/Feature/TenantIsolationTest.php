@@ -80,3 +80,28 @@ it('auto-sets organization_id on create from the active organization', function 
 
     expect((int) $folder->organization_id)->toBe($org->id);
 });
+
+it('denies tenant document queries for a user with no organization membership', function (): void {
+    $org = tenantOrg('unrelated-org');
+    tenantDoc($org, 'unrelated-document');
+    $user = User::create(['name' => 'No Membership', 'email' => 'no-membership@example.test', 'password' => 'password']);
+
+    $this->actingAs($user);
+    session()->forget('active_organization_id');
+
+    expect(Document::query()->count())->toBe(0);
+});
+
+it('denies a session-selected organization outside the user memberships', function (): void {
+    $orgA = tenantOrg('authorized-org');
+    $orgB = tenantOrg('unauthorized-org');
+    tenantDoc($orgA, 'authorized-document');
+    $docB = tenantDoc($orgB, 'unauthorized-document');
+    $user = User::create(['name' => 'Restricted User', 'email' => 'restricted@example.test', 'password' => 'password']);
+    $user->organizations()->attach($orgA->id, ['role' => 'member']);
+
+    $this->actingAs($user);
+    session(['active_organization_id' => $orgB->id]);
+
+    expect(Document::query()->pluck('id')->all())->not->toContain($docB->id);
+});
