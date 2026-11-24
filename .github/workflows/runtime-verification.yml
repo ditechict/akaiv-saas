@@ -29,6 +29,7 @@ jobs:
           --health-cmd "clamdscan --ping 1"
           --health-interval 10s --health-timeout 5s --health-retries 30
     env:
+      AKAIV_SERVICE_TESTS: '1'
       CLAMAV_HOST: 127.0.0.1
       CLAMAV_PORT: 3310
       PULSE_ENABLED: 'false'
@@ -74,7 +75,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          vendor/bin/pest tests/Feature/TenantIsolationTest.php tests/Feature/DocumentPipelineTest.php tests/Feature/DocumentServicesRuntimeTest.php tests/Feature/PreviewDocumentTest.php tests/Unit/DocumentPolicyTest.php tests/Feature/DocumentAgentControllerTest.php --colors=never --log-junit runtime-verification.xml | tee runtime-verification.log
+          vendor/bin/pest --colors=never --log-junit runtime-verification.xml | tee runtime-verification.log
       - name: Preserve verification results
         if: always()
         uses: actions/upload-artifact@v4
