@@ -1,0 +1,63 @@
+name: Tenant and document runtime verification
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: akaiv-saas
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: akaiv_test
+          POSTGRES_USER: akaiv
+          POSTGRES_PASSWORD: akaiv
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U akaiv"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+    env:
+      APP_ENV: testing
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: akaiv_test
+      DB_USERNAME: akaiv
+      DB_PASSWORD: akaiv
+      REDIS_HOST: 127.0.0.1
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+      CACHE_STORE: array
+      SCOUT_DRIVER: collection
+      MAIL_MAILER: array
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, pdo_pgsql, pdo_sqlite, bcmath, exif, pcntl, zip, gd, redis, sockets
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Prepare isolated environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+      - name: Run tenant and document runtime tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          vendor/bin/pest tests/Feature/TenantIsolationTest.php tests/Feature/DocumentPipelineTest.php tests/Feature/PreviewDocumentTest.php tests/Unit/DocumentPolicyTest.php tests/Feature/DocumentAgentControllerTest.php --colors=never --log-junit runtime-verification.xml | tee runtime-verification.log
+      - name: Preserve verification results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenant-document-runtime-results
+          path: |
+            akaiv-saas/runtime-verification.xml
+            akaiv-saas/runtime-verification.log
