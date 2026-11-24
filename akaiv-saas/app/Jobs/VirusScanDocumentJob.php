@@ -35,6 +35,7 @@ class VirusScanDocumentJob implements ShouldQueue
             return;
         }
 
+        $stream = null;
         try {
             $stream = $disk->readStream($path);
             $socket = (new Factory())->createClient(sprintf(
@@ -42,13 +43,8 @@ class VirusScanDocumentJob implements ShouldQueue
                 config('services.clamav.host'),
                 config('services.clamav.port', 3310),
             ));
-            $clam = new Client($socket);
+            $clam = new Client($socket, 30, PHP_NORMAL_READ);
             $result = $clam->scanResourceStream($stream);
-            $clam->disconnect();
-
-            if (is_resource($stream)) {
-                fclose($stream);
-            }
 
             if ($result->isFound()) {
                 $this->document->updateQuietly([
@@ -66,6 +62,9 @@ class VirusScanDocumentJob implements ShouldQueue
                     ->log('document.virus_detected');
                 return;
             }
+            if (! $result->isOk()) {
+                throw new \RuntimeException($result->getReason() ?? 'ClamAV returned an unsuccessful result.');
+            }
         } catch (Exception $e) {
             report($e);
             $this->document->updateQuietly([
@@ -73,6 +72,10 @@ class VirusScanDocumentJob implements ShouldQueue
             ]);
             $this->release(300);
             return;
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
         }
 
         $this->document->updateQuietly([
