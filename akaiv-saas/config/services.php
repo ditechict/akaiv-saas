@@ -1,7 +1,6 @@
 <?php
 
 return [
-    'services' => [
         'clamav' => [
             'host' => env('CLAMAV_HOST', '127.0.0.1'),
             'port' => env('CLAMAV_PORT', 3310),
@@ -23,5 +22,4 @@ return [
             'url' => env('DOCUMENT_AGENT_URL'),
             'secret' => env('DOCUMENT_AGENT_SECRET'),
         ],
-    ],
 ];
