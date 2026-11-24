@@ -17,12 +17,21 @@ jobs:
           POSTGRES_PASSWORD: akaiv
         ports: ['5432:5432']
         options: >-
-          --health-cmd "pg_isready -U akaiv"
+          --health-cmd "pg_isready -U akaiv -d akaiv_test"
           --health-interval 10s --health-timeout 5s --health-retries 5
       redis:
         image: redis:7-alpine
         ports: ['6379:6379']
+      clamav:
+        image: clamav/clamav:stable
+        ports: ['3310:3310']
+        options: >-
+          --health-cmd "clamdscan --ping 1"
+          --health-interval 10s --health-timeout 5s --health-retries 30
     env:
+      CLAMAV_HOST: 127.0.0.1
+      CLAMAV_PORT: 3310
+      PULSE_ENABLED: 'false'
       APP_ENV: testing
       DB_CONNECTION: pgsql
       DB_HOST: 127.0.0.1
@@ -43,6 +52,17 @@ jobs:
           php-version: '8.3'
           extensions: mbstring, intl, pdo_pgsql, pdo_sqlite, bcmath, exif, pcntl, zip, gd, redis, sockets
           coverage: none
+      - name: Install document tools and generate PDF fixture
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y tesseract-ocr poppler-utils python3-reportlab
+          /usr/bin/python3 - <<'PY'
+          from reportlab.pdfgen import canvas
+          pdf = canvas.Canvas('/tmp/akaiv-runtime.pdf')
+          pdf.setFont('Helvetica', 28)
+          pdf.drawString(60, 700, 'AKAIV COURT RECORD')
+          pdf.save()
+          PY
       - name: Create runtime directories
         run: mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
       - run: composer install --no-interaction --prefer-dist --no-progress
@@ -54,7 +74,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          vendor/bin/pest tests/Feature/TenantIsolationTest.php tests/Feature/DocumentPipelineTest.php tests/Feature/PreviewDocumentTest.php tests/Unit/DocumentPolicyTest.php tests/Feature/DocumentAgentControllerTest.php --colors=never --log-junit runtime-verification.xml | tee runtime-verification.log
+          vendor/bin/pest tests/Feature/TenantIsolationTest.php tests/Feature/DocumentPipelineTest.php tests/Feature/DocumentServicesRuntimeTest.php tests/Feature/PreviewDocumentTest.php tests/Unit/DocumentPolicyTest.php tests/Feature/DocumentAgentControllerTest.php --colors=never --log-junit runtime-verification.xml | tee runtime-verification.log
       - name: Preserve verification results
         if: always()
         uses: actions/upload-artifact@v4
