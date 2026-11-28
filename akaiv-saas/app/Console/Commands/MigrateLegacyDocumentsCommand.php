@@ -87,11 +87,6 @@ class MigrateLegacyDocumentsCommand extends Command
                 $legacyFolderName ?? '(none)'
             ));
 
-            if ($dry) {
-                $migrated++;
-                continue;
-            }
-
             $disk = null;
             $newKey = null;
             $transactionLevel = DB::transactionLevel();
@@ -112,8 +107,6 @@ class MigrateLegacyDocumentsCommand extends Command
                 if (! $disk->put($newKey, file_get_contents($file->getPathname()), 'private')) {
                     throw new \RuntimeException('Failed to store imported document.');
                 }
-                $sha = hash_file('sha256', $file->getPathname());
-
                 $document = new NewDocument([
                     'uuid' => $uuid,
                     'organization_id' => $org->id,
