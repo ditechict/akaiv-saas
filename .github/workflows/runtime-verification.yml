@@ -62,6 +62,9 @@ jobs:
           pdf = canvas.Canvas('/tmp/akaiv-runtime.pdf')
           pdf.setFont('Helvetica', 28)
           pdf.drawString(60, 700, 'AKAIV COURT RECORD')
+          pdf.showPage()
+          pdf.setFont('Helvetica', 28)
+          pdf.drawString(60, 700, 'SECOND PAGE EVIDENCE')
           pdf.save()
           PY
       - name: Create runtime directories
