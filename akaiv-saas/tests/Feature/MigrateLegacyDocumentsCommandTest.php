@@ -87,3 +87,24 @@ it('does not duplicate documents or files when rerun', function (): void {
     expect(Document::withoutTenancy()->count())->toBe(1)
         ->and(Storage::disk('s3')->allFiles())->toHaveCount(1);
 });
+
+it('keeps imported folder ownership within the target organization', function (): void {
+    Storage::fake('s3');
+    $other = Organization::create(['name' => 'Other Court', 'slug' => 'other-court', 'contact_email' => 'other@example.test']);
+    $foreign = \App\Models\Folder::create(['organization_id' => $other->id, 'name' => 'Judgments']);
+    $this->artisan('app:migrate-legacy-documents', ['--legacy-files' => legacyFixture(), '--target-org-slug' => 'default'])->assertSuccessful();
+    $document = Document::withoutTenancy()->first();
+    expect($document->folder_id)->not->toBe($foreign->id)
+        ->and($document->folder->organization_id)->toBe($document->organization_id);
+});
+
+it('rolls back database writes when storing a legacy document fails', function (): void {
+    $disk = Mockery::mock(\Illuminate\Filesystem\FilesystemAdapter::class);
+    $disk->shouldReceive('put')->once()->andReturn(false);
+    $disk->shouldReceive('delete')->once()->andReturn(true);
+    Storage::shouldReceive('disk')->with('s3')->andReturn($disk);
+    $this->artisan('app:migrate-legacy-documents', ['--legacy-files' => legacyFixture(), '--target-org-slug' => 'default'])->assertFailed();
+    expect(Document::withoutTenancy()->count())->toBe(0)
+        ->and(\App\Models\User::count())->toBe(0)
+        ->and(\App\Models\Folder::withoutTenancy()->count())->toBe(0);
+});
