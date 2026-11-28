@@ -90,3 +90,16 @@ it('removes an ineligible record from its search engine', function (): void {
     app()->instance(\Laravel\Scout\EngineManager::class, $manager);
     (new IndexDocumentJob($document))->handle();
 });
+
+it('extracts native text documents without invoking image OCR', function (): void {
+    \Illuminate\Support\Facades\Queue::fake();
+    Storage::fake('private');
+    $document = pipelineDocument([
+        'status' => 'published', 'virus_scanned' => true, 'ocr_required' => true,
+        'file_extension' => 'txt', 'mime_type' => 'text/plain',
+    ]);
+    Storage::disk('private')->put($document->storage_path, 'Native legal record');
+    (new OcrDocumentJob($document))->handle();
+    expect($document->fresh()->extracted_text)->toBe('Native legal record')
+        ->and($document->fresh()->ocr_completed)->toBeTrue();
+});
