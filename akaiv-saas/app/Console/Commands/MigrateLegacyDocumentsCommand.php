@@ -79,9 +79,6 @@ class MigrateLegacyDocumentsCommand extends Command
                 continue;
             }
 
-            $user = $this->matchUserByName($pdo, $legacyUsername);
-            $folder = $legacyFolderName ? $this->findOrCreateFolder($org, $user, $legacyFolderName, $dry) : null;
-
             $this->line(sprintf(
                 '  %-3s %-50s owner=%-25s folder=%s',
                 $dry ? '[DRY]' : '[OK]',
@@ -95,16 +92,26 @@ class MigrateLegacyDocumentsCommand extends Command
                 continue;
             }
 
+            $disk = null;
+            $newKey = null;
+            $transactionLevel = DB::transactionLevel();
             try {
+                DB::beginTransaction();
+                Organization::whereKey($org->id)->lockForUpdate()->firstOrFail();
                 $sha = hash_file('sha256', $file->getPathname());
                 if (NewDocument::where('organization_id', $org->id)->where('sha256_checksum', $sha)->exists()) {
+                    DB::rollBack();
                     continue;
                 }
+                $user = $this->matchUserByName($pdo, $legacyUsername);
+                $folder = $legacyFolderName ? $this->findOrCreateFolder($org, $user, $legacyFolderName, false) : null;
                 $uuid = (string) Str::uuid();
                 $ext = $file->getExtension();
                 $newKey = "org_{$org->id}/docs/{$uuid}/{$uuid}." . strtolower($ext);
                 $disk = Storage::disk(config('filesystems.default'));
-                $disk->put($newKey, file_get_contents($file->getPathname()), 'private');
+                if (! $disk->put($newKey, file_get_contents($file->getPathname()), 'private')) {
+                    throw new \RuntimeException('Failed to store imported document.');
+                }
                 $sha = hash_file('sha256', $file->getPathname());
 
                 $document = new NewDocument([
@@ -130,9 +137,16 @@ class MigrateLegacyDocumentsCommand extends Command
                 $document->setCreatedAt($timestamp ?? Carbon::createFromTimestamp($file->getCTime()));
                 $document->setUpdatedAt(Carbon::createFromTimestamp($file->getMTime()));
                 $document->save();
+                DB::commit();
 
                 $migrated++;
             } catch (\Throwable $e) {
+                if (DB::transactionLevel() > $transactionLevel) {
+                    DB::rollBack();
+                }
+                if ($disk && $newKey && ! NewDocument::withoutTenancy()->where('storage_path', $newKey)->exists()) {
+                    $disk->delete($newKey);
+                }
                 $failures->push($relPath . ' | ' . $e->getMessage());
                 report($e);
             }
@@ -145,7 +159,8 @@ class MigrateLegacyDocumentsCommand extends Command
             $failures->each(fn($l) => file_put_contents($outPath, $l . PHP_EOL, FILE_APPEND));
             $this->warn("Failures: {$failures->count()}. Report: {$outPath}");
         }
-        return self::SUCCESS;
+        return $failures->contains(fn ($failure) => ! str_contains($failure, 'skipped: PHP executable'))
+            ? self::FAILURE : self::SUCCESS;
     }
 
     private function matchUserByName(?\PDO $pdo, string $legacyUsername): ?NewUser
