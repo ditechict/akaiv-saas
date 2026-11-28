@@ -178,3 +178,21 @@ it('rejects signed document access across tenants and after membership removal',
     $user->organizations()->detach();
     $this->withSession(['active_organization_id' => $orgB->id])->get($url)->assertNotFound();
 });
+
+it('rejects moving an existing record to another tenant and deleting a foreign record', function (): void {
+    $orgA = tenantOrg('move-a');
+    $orgB = tenantOrg('move-b');
+    $own = tenantDoc($orgA, 'move-own');
+    $foreign = tenantDoc($orgB, 'delete-foreign');
+    $user = User::create(['name' => 'Mover', 'email' => 'mover@example.test', 'password' => 'password']);
+    $user->organizations()->attach($orgA->id, ['role' => 'member']);
+    $this->actingAs($user);
+    session(['active_organization_id' => $orgA->id]);
+
+    expect(fn () => $own->update(['organization_id' => $orgB->id]))
+        ->toThrow(\Illuminate\Auth\Access\AuthorizationException::class);
+    expect(fn () => $foreign->delete())
+        ->toThrow(\Illuminate\Auth\Access\AuthorizationException::class);
+    expect(Document::withoutTenancy()->find($own->id)->organization_id)->toBe($orgA->id)
+        ->and(Document::withoutTenancy()->find($foreign->id))->not->toBeNull();
+});
