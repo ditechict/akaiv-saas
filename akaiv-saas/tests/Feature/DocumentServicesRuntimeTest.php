@@ -50,19 +50,20 @@ it('scans a clean PDF using ClamAV and dispatches processing jobs', function ():
     expect($document->fresh()->virus_scanned)->toBeTrue()
         ->and($document->fresh()->virus_found)->toBeFalse()
         ->and($document->fresh()->status)->toBe('published');
-    Queue::assertPushed(OcrDocumentJob::class);
-    Queue::assertPushed(ThumbnailDocumentJob::class);
-    Queue::assertPushed(IndexDocumentJob::class);
+    Queue::assertPushedWithChain(OcrDocumentJob::class, [ThumbnailDocumentJob::class, IndexDocumentJob::class]);
 });
 
 it('extracts PDF text through Poppler and Tesseract', function (): void {
     $document = runtimeDocument();
     Storage::disk('private')->put($document->storage_path, file_get_contents('/tmp/akaiv-runtime.pdf'));
 
+    $document->updateQuietly(['status' => 'published', 'virus_scanned' => true]);
     (new OcrDocumentJob($document))->handle();
 
     expect($document->fresh()->ocr_completed)->toBeTrue()
-        ->and(strtoupper($document->fresh()->extracted_text))->toContain('AKAIV COURT RECORD');
+        ->and(strtoupper($document->fresh()->extracted_text))->toContain('AKAIV COURT RECORD')
+        ->and(strtoupper($document->fresh()->extracted_text))->toContain('SECOND PAGE EVIDENCE')
+        ->and($document->fresh()->page_count)->toBe(2);
 });
 
 it('creates a valid PNG thumbnail through Poppler', function (): void {
