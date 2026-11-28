@@ -21,7 +21,11 @@ class IndexDocumentJob implements ShouldQueue
 
     public function handle(): void
     {
-        if ($this->document->status === 'deleted') {
+        $this->document = $this->document->fresh();
+        if (! $this->document) {
+            return;
+        }
+        if (! $this->document->shouldBeSearchable()) {
             $this->document->unsearchable();
             return;
         }
