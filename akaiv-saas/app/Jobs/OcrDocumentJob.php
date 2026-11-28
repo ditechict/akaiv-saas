@@ -25,8 +25,12 @@ class OcrDocumentJob implements ShouldQueue
 
     public function handle(): void
     {
-        $this->document = $this->document->fresh();
-        if (! $this->document || $this->document->status !== 'published' ||
+        $document = $this->document->fresh();
+        if (! $document) {
+            return;
+        }
+        $this->document = $document;
+        if ($this->document->status !== 'published' ||
             ! $this->document->virus_scanned || $this->document->virus_found) {
             return;
         }
