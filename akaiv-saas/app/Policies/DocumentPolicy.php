@@ -37,7 +37,7 @@ class DocumentPolicy
 
     public function create(User $user): bool
     {
-        return $user->hasPermissionTo('document.create');
+        return $user->currentOrganization() !== null && $user->hasPermissionTo('document.create');
     }
 
     public function update(User $user, Document $document): bool
@@ -58,7 +58,7 @@ class DocumentPolicy
 
     private function assertOrg(User $user, Document $document): bool
     {
-        $activeOrg = session('active_organization_id');
-        return $activeOrg !== null && (int) $document->organization_id === (int) $activeOrg;
+        $organization = $user->currentOrganization();
+        return $organization !== null && (int) $document->organization_id === (int) $organization->id;
     }
 }
