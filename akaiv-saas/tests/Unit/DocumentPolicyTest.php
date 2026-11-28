@@ -44,6 +44,7 @@ it('allows an owner to view a document in the active organization', function ():
         'contact_email' => 'court@example.test',
     ]);
     $user = policyUser('owner@example.test');
+    $user->organizations()->attach($organization->id, ['role' => 'member']);
     $document = policyDocument($organization->id, $user->id);
 
     session(['active_organization_id' => $organization->id]);
