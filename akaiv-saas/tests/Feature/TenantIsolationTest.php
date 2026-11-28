@@ -164,7 +164,7 @@ it('denies policy access to a foreign record despite a forged selection', functi
         ->and($user->can('update', $document))->toBeFalse();
 });
 
-it('rejects signed document access across tenants and after membership removal', function (): void {
+it('rejects signed document access across tenants and after membership removal', function (string $route): void {
     \Spatie\Permission\Models\Permission::create(['name' => 'document.view', 'guard_name' => 'web']);
     $orgA = tenantOrg('http-a');
     $orgB = tenantOrg('http-b');
@@ -172,12 +172,12 @@ it('rejects signed document access across tenants and after membership removal',
     $user = User::create(['name' => 'HTTP User', 'email' => 'http-user@example.test', 'password' => 'password']);
     $user->organizations()->attach($orgA->id, ['role' => 'member']);
     $this->actingAs($user);
-    $url = \Illuminate\Support\Facades\URL::temporarySignedRoute('documents.preview', now()->addMinute(), ['document' => $document->uuid]);
+    $url = \Illuminate\Support\Facades\URL::temporarySignedRoute($route, now()->addMinute(), ['document' => $document->uuid]);
     $this->withSession(['active_organization_id' => $orgB->id])->get($url)->assertNotFound();
 
     $user->organizations()->detach();
     $this->withSession(['active_organization_id' => $orgB->id])->get($url)->assertNotFound();
-});
+})->with(['documents.preview', 'documents.download']);
 
 it('rejects moving an existing record to another tenant and deleting a foreign record', function (): void {
     $orgA = tenantOrg('move-a');
