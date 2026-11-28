@@ -108,6 +108,15 @@ class Document extends Model implements HasMedia
             ->dontSubmitEmptyLogs();
     }
 
+    public function shouldBeSearchable(): bool
+    {
+        return $this->status === 'published'
+            && $this->virus_scanned
+            && ! $this->virus_found
+            && (! $this->ocr_required || $this->ocr_completed)
+            && ! $this->trashed();
+    }
+
     public function toSearchableArray(): array
     {
         return [
