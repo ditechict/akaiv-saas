@@ -19,3 +19,18 @@ Acceptance criteria
 Rollback
 
 Revert the remediation commits through a reviewed PR. No schema migration is planned. Deployment and credential changes require their own rollback assessment.
+
+## Implementation status
+
+- Step 1 implemented with model save/delete membership enforcement, validated document policy checks, stale-session clearing and signed preview/download regressions.
+- Step 2 implemented with an ordered processing chain, search eligibility gates, observable engine-removal assertions, all-page PDF extraction and native text extraction.
+- Step 3 implemented with schema-compatible user creation, write-free dry runs, tenant-specific folder lookup, per-organization transactional retry protection, rollback cleanup and preserved timestamps.
+- Step 4 implemented with enforced CI failures, independent backend verification, generated two-page PDF fixture and a Pint gate covering changed PHP files. Runtime logs and final validation are recorded in PR #2.
+- Step 5 remains pending provider access and dedicated staging integration. Credential values are redacted on this branch, but live rotation and Git-history remediation are pending.
+
+Outstanding release checks
+
+- The existing Worker suite fails during collection because the installed Workers test runtime cannot load cloudflare-internal:email.
+- Repository-wide Pint reports inherited style debt outside the remediation scope. The changed-file gate is independent.
+- Real Meilisearch indexing, durable Redis worker execution, malware-positive detection and cloud storage remain outside the completed runtime coverage.
+- Trusted console jobs and explicit platform administrator access retain their existing behavior. Scoped authenticated model writes are covered. Bulk SQL writes require caller-level authorization.
