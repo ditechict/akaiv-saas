@@ -26,9 +26,6 @@ class IndexDocumentJob implements ShouldQueue
             return;
         }
         $this->document = $document;
-        if (! $this->document) {
-            return;
-        }
         if (! $this->document->shouldBeSearchable()) {
             $this->document->unsearchable();
             return;
