@@ -105,3 +105,76 @@ it('denies a session-selected organization outside the user memberships', functi
 
     expect(Document::query()->pluck('id')->all())->not->toContain($docB->id);
 });
+
+it('rejects a foreign organization on create and preserves the database', function (): void {
+    $orgA = tenantOrg('write-a');
+    $orgB = tenantOrg('write-b');
+    $user = User::create(['name' => 'Writer', 'email' => 'writer@example.test', 'password' => 'password']);
+    $user->organizations()->attach($orgA->id, ['role' => 'member']);
+    $this->actingAs($user);
+    session(['active_organization_id' => $orgB->id]);
+
+    expect(fn () => tenantDoc($orgB, 'foreign-create'))
+        ->toThrow(\Illuminate\Auth\Access\AuthorizationException::class);
+    expect(Document::withoutTenancy()->count())->toBe(0);
+    expect((int) session('active_organization_id'))->toBe($orgA->id);
+});
+
+it('rejects an update to a foreign record loaded before authentication', function (): void {
+    $orgA = tenantOrg('update-a');
+    $orgB = tenantOrg('update-b');
+    $document = tenantDoc($orgB, 'foreign-update');
+    $user = User::create(['name' => 'Updater', 'email' => 'updater@example.test', 'password' => 'password']);
+    $user->organizations()->attach($orgA->id, ['role' => 'member']);
+    $this->actingAs($user);
+    session(['active_organization_id' => $orgA->id]);
+
+    expect(fn () => $document->update(['friendly_name' => 'Changed']))
+        ->toThrow(\Illuminate\Auth\Access\AuthorizationException::class);
+    expect(Document::withoutTenancy()->find($document->id)->friendly_name)->toBe('foreign-update');
+});
+
+it('denies creation after membership removal and clears the stale selection', function (): void {
+    $org = tenantOrg('revoked-write');
+    $user = User::create(['name' => 'Revoked', 'email' => 'revoked@example.test', 'password' => 'password']);
+    $user->organizations()->attach($org->id, ['role' => 'member']);
+    $this->actingAs($user);
+    session(['active_organization_id' => $org->id]);
+    $user->organizations()->detach($org->id);
+
+    expect(fn () => \App\Models\Folder::create(['name' => 'Forbidden']))
+        ->toThrow(\Illuminate\Auth\Access\AuthorizationException::class);
+    expect(session()->has('active_organization_id'))->toBeFalse();
+});
+
+it('denies policy access to a foreign record despite a forged selection', function (): void {
+    \Spatie\Permission\Models\Permission::create(['name' => 'document.view_any', 'guard_name' => 'web']);
+    \Spatie\Permission\Models\Permission::create(['name' => 'document.view', 'guard_name' => 'web']);
+    \Spatie\Permission\Models\Permission::create(['name' => 'document.update_any', 'guard_name' => 'web']);
+    $orgA = tenantOrg('policy-a');
+    $orgB = tenantOrg('policy-b');
+    $document = tenantDoc($orgB, 'policy-foreign');
+    $user = User::create(['name' => 'Policy User', 'email' => 'policy-user@example.test', 'password' => 'password']);
+    $user->organizations()->attach($orgA->id, ['role' => 'member']);
+    $user->givePermissionTo(['document.view_any', 'document.update_any']);
+    $this->actingAs($user);
+    session(['active_organization_id' => $orgB->id]);
+
+    expect($user->can('view', $document))->toBeFalse()
+        ->and($user->can('update', $document))->toBeFalse();
+});
+
+it('rejects signed document access across tenants and after membership removal', function (): void {
+    \Spatie\Permission\Models\Permission::create(['name' => 'document.view', 'guard_name' => 'web']);
+    $orgA = tenantOrg('http-a');
+    $orgB = tenantOrg('http-b');
+    $document = tenantDoc($orgB, 'http-foreign');
+    $user = User::create(['name' => 'HTTP User', 'email' => 'http-user@example.test', 'password' => 'password']);
+    $user->organizations()->attach($orgA->id, ['role' => 'member']);
+    $this->actingAs($user);
+    $url = \Illuminate\Support\Facades\URL::temporarySignedRoute('documents.preview', now()->addMinute(), ['document' => $document->uuid]);
+    $this->withSession(['active_organization_id' => $orgB->id])->get($url)->assertNotFound();
+
+    $user->organizations()->detach();
+    $this->withSession(['active_organization_id' => $orgB->id])->get($url)->assertNotFound();
+});
