@@ -12,7 +12,7 @@ trait BelongsToOrganization
     {
         static::addGlobalScope(new OrganizationScope());
 
-        static::saving(function ($model) {
+        $authorizeTenantWrite = function ($model) {
             $user = auth()->user();
             if ($user && ! $user->hasRole('Platform SuperAdmin')) {
                 $organization = $user->currentOrganization();
@@ -29,7 +29,9 @@ trait BelongsToOrganization
             } elseif (! $model->organization_id && session()->has('active_organization_id')) {
                 $model->organization_id = session('active_organization_id');
             }
-        });
+        };
+        static::saving($authorizeTenantWrite);
+        static::deleting($authorizeTenantWrite);
     }
 
     public function organization(): BelongsTo
