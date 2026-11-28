@@ -43,6 +43,15 @@ class OcrDocumentJob implements ShouldQueue
             throw new \RuntimeException('OCR source document is missing.');
         }
 
+        if (str_starts_with((string) $this->document->mime_type, 'text/')) {
+            $this->document->updateQuietly([
+                'extracted_text' => trim($disk->get($this->document->storage_path)),
+                'ocr_completed' => true,
+                'page_count' => 1,
+            ]);
+            return;
+        }
+
         $directory = sys_get_temp_dir().'/akaiv-ocr-'.Str::uuid();
         File::makeDirectory($directory, 0700);
         try {
