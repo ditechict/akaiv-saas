@@ -79,6 +79,7 @@ it('requires download permission even when viewing is allowed', function (): voi
     ]);
     $user = policyUser('viewer@example.test');
     $user->givePermissionTo('document.view');
+    $user->organizations()->attach($organization->id, ['role' => 'member']);
     $document = policyDocument($organization->id, $user->id);
 
     session(['active_organization_id' => $organization->id]);
