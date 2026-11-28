@@ -9,8 +9,9 @@ use App\Models\Organization;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function (): void {
     if (! getenv('AKAIV_SERVICE_TESTS')) {
@@ -27,6 +28,7 @@ function runtimeDocument(): Document
         'slug' => 'runtime-court',
         'contact_email' => 'runtime@example.test',
     ]);
+
     return Document::create([
         'organization_id' => $org->id,
         'friendly_name' => 'Runtime Court Record',

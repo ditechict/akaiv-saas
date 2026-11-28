@@ -4,15 +4,15 @@ namespace App\Policies;
 
 use App\Models\Document;
 use App\Models\User;
-use Illuminate\Auth\Access\Response;
 
 class DocumentPolicy
 {
-    public function before(User $user, string $ability): bool|null
+    public function before(User $user, string $ability): ?bool
     {
         if ($user->hasRole('Platform SuperAdmin')) {
             return true;
         }
+
         return null;
     }
 
@@ -59,6 +59,7 @@ class DocumentPolicy
     private function assertOrg(User $user, Document $document): bool
     {
         $organization = $user->currentOrganization();
+
         return $organization !== null && (int) $document->organization_id === (int) $organization->id;
     }
 }

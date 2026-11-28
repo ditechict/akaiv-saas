@@ -6,8 +6,9 @@ use App\Models\User;
 use App\Policies\DocumentPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class);
 
 function policyUser(string $email): User
 {

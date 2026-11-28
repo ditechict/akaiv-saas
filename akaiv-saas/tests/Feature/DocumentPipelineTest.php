@@ -7,9 +7,13 @@ use App\Jobs\VirusScanDocumentJob;
 use App\Models\Document;
 use App\Models\Organization;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Scout\EngineManager;
+use Laravel\Scout\Engines\Engine;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class);
 
 function pipelineDocument(array $attributes = []): Document
 {
@@ -83,16 +87,16 @@ it('excludes unsafe and unfinished records from search eligibility', function (a
 
 it('removes an ineligible record from its search engine', function (): void {
     $document = pipelineDocument(['status' => 'quarantined']);
-    $engine = Mockery::mock(\Laravel\Scout\Engines\Engine::class);
+    $engine = Mockery::mock(Engine::class);
     $engine->shouldReceive('delete')->once()->withArgs(fn ($models) => $models->contains('id', $document->id));
-    $manager = Mockery::mock(\Laravel\Scout\EngineManager::class);
+    $manager = Mockery::mock(EngineManager::class);
     $manager->shouldReceive('engine')->andReturn($engine);
-    app()->instance(\Laravel\Scout\EngineManager::class, $manager);
+    app()->instance(EngineManager::class, $manager);
     (new IndexDocumentJob($document))->handle();
 });
 
 it('extracts native text documents without invoking image OCR', function (): void {
-    \Illuminate\Support\Facades\Queue::fake();
+    Queue::fake();
     Storage::fake('private');
     $document = pipelineDocument([
         'status' => 'published', 'virus_scanned' => true, 'ocr_required' => true,

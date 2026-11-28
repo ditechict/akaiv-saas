@@ -13,10 +13,10 @@ use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
-    use HasFactory;
-    use Notifiable;
-    use HasRoles;
     use Billable;
+    use HasFactory;
+    use HasRoles;
+    use Notifiable;
     use SoftDeletes;
 
     protected $fillable = [
@@ -68,6 +68,7 @@ class User extends Authenticatable
         if (! $first) {
             session()->forget('active_organization_id');
         }
+
         return $first;
     }
 
@@ -76,6 +77,7 @@ class User extends Authenticatable
         $pivot = $this->organizations()
             ->where('organization_id', $organization->id)
             ->first()?->pivot;
+
         return $pivot?->role;
     }
 

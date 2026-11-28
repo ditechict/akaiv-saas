@@ -1,12 +1,17 @@
 <?php
 
 use App\Models\Document;
+use App\Models\Folder;
 use App\Models\Organization;
 use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\URL;
+use Spatie\Permission\Models\Permission;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function (): void {
     Queue::fake();
@@ -76,7 +81,7 @@ it('auto-sets organization_id on create from the active organization', function 
     $this->actingAs($user);
     session(['active_organization_id' => $org->id]);
 
-    $folder = \App\Models\Folder::create(['name' => 'Filings']);
+    $folder = Folder::create(['name' => 'Filings']);
 
     expect((int) $folder->organization_id)->toBe($org->id);
 });
@@ -115,7 +120,7 @@ it('rejects a foreign organization on create and preserves the database', functi
     session(['active_organization_id' => $orgB->id]);
 
     expect(fn () => tenantDoc($orgB, 'foreign-create'))
-        ->toThrow(\Illuminate\Auth\Access\AuthorizationException::class);
+        ->toThrow(AuthorizationException::class);
     expect(Document::withoutTenancy()->count())->toBe(0);
     expect((int) session('active_organization_id'))->toBe($orgA->id);
 });
@@ -130,7 +135,7 @@ it('rejects an update to a foreign record loaded before authentication', functio
     session(['active_organization_id' => $orgA->id]);
 
     expect(fn () => $document->update(['friendly_name' => 'Changed']))
-        ->toThrow(\Illuminate\Auth\Access\AuthorizationException::class);
+        ->toThrow(AuthorizationException::class);
     expect(Document::withoutTenancy()->find($document->id)->friendly_name)->toBe('foreign-update');
 });
 
@@ -142,15 +147,15 @@ it('denies creation after membership removal and clears the stale selection', fu
     session(['active_organization_id' => $org->id]);
     $user->organizations()->detach($org->id);
 
-    expect(fn () => \App\Models\Folder::create(['name' => 'Forbidden']))
-        ->toThrow(\Illuminate\Auth\Access\AuthorizationException::class);
+    expect(fn () => Folder::create(['name' => 'Forbidden']))
+        ->toThrow(AuthorizationException::class);
     expect(session()->has('active_organization_id'))->toBeFalse();
 });
 
 it('denies policy access to a foreign record despite a forged selection', function (): void {
-    \Spatie\Permission\Models\Permission::create(['name' => 'document.view_any', 'guard_name' => 'web']);
-    \Spatie\Permission\Models\Permission::create(['name' => 'document.view', 'guard_name' => 'web']);
-    \Spatie\Permission\Models\Permission::create(['name' => 'document.update_any', 'guard_name' => 'web']);
+    Permission::create(['name' => 'document.view_any', 'guard_name' => 'web']);
+    Permission::create(['name' => 'document.view', 'guard_name' => 'web']);
+    Permission::create(['name' => 'document.update_any', 'guard_name' => 'web']);
     $orgA = tenantOrg('policy-a');
     $orgB = tenantOrg('policy-b');
     $document = tenantDoc($orgB, 'policy-foreign');
@@ -165,14 +170,14 @@ it('denies policy access to a foreign record despite a forged selection', functi
 });
 
 it('rejects signed document access across tenants and after membership removal', function (string $route): void {
-    \Spatie\Permission\Models\Permission::create(['name' => 'document.view', 'guard_name' => 'web']);
+    Permission::create(['name' => 'document.view', 'guard_name' => 'web']);
     $orgA = tenantOrg('http-a');
     $orgB = tenantOrg('http-b');
     $document = tenantDoc($orgB, 'http-foreign');
     $user = User::create(['name' => 'HTTP User', 'email' => 'http-user@example.test', 'password' => 'password']);
     $user->organizations()->attach($orgA->id, ['role' => 'member']);
     $this->actingAs($user);
-    $url = \Illuminate\Support\Facades\URL::temporarySignedRoute($route, now()->addMinute(), ['document' => $document->uuid]);
+    $url = URL::temporarySignedRoute($route, now()->addMinute(), ['document' => $document->uuid]);
     $this->withSession(['active_organization_id' => $orgB->id])->get($url)->assertNotFound();
 
     $user->organizations()->detach();
@@ -190,9 +195,9 @@ it('rejects moving an existing record to another tenant and deleting a foreign r
     session(['active_organization_id' => $orgA->id]);
 
     expect(fn () => $own->update(['organization_id' => $orgB->id]))
-        ->toThrow(\Illuminate\Auth\Access\AuthorizationException::class);
+        ->toThrow(AuthorizationException::class);
     expect(fn () => $foreign->delete())
-        ->toThrow(\Illuminate\Auth\Access\AuthorizationException::class);
+        ->toThrow(AuthorizationException::class);
     expect(Document::withoutTenancy()->find($own->id)->organization_id)->toBe($orgA->id)
         ->and(Document::withoutTenancy()->find($foreign->id))->not->toBeNull();
 });

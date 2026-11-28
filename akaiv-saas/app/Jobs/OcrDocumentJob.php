@@ -19,6 +19,7 @@ class OcrDocumentJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 2;
+
     public int $timeout = 900;
 
     public function __construct(public Document $document) {}
@@ -49,6 +50,7 @@ class OcrDocumentJob implements ShouldQueue
                 'ocr_completed' => true,
                 'page_count' => 1,
             ]);
+
             return;
         }
 

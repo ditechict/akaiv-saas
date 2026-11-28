@@ -1,14 +1,19 @@
 <?php
 
 use App\Models\Document;
+use App\Models\Folder;
 use App\Models\Organization;
+use App\Models\User;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function (): void {
-    \Illuminate\Support\Facades\Queue::fake();
+    Queue::fake();
     config(['filesystems.default' => 's3']);
     Organization::create([
         'name' => 'Default Court',
@@ -29,7 +34,7 @@ function legacyFixture(): string
 }
 
 it('does not write documents during a dry run', function (): void {
-    \Illuminate\Support\Facades\Queue::fake();
+    Queue::fake();
     config(['filesystems.default' => 's3']);
     Storage::fake('s3');
     $root = legacyFixture();
@@ -41,8 +46,8 @@ it('does not write documents during a dry run', function (): void {
     ])->assertSuccessful();
 
     expect(Document::withoutTenancy()->count())->toBe(0)
-        ->and(\App\Models\User::count())->toBe(0)
-        ->and(\App\Models\Folder::withoutTenancy()->count())->toBe(0)
+        ->and(User::count())->toBe(0)
+        ->and(Folder::withoutTenancy()->count())->toBe(0)
         ->and(Storage::disk('s3')->allFiles())->toBeEmpty();
 });
 
@@ -77,7 +82,7 @@ it('parses the embedded timestamp into created_at', function (): void {
 });
 
 it('does not duplicate documents or files when rerun', function (): void {
-    \Illuminate\Support\Facades\Queue::fake();
+    Queue::fake();
     config(['filesystems.default' => 's3']);
     Storage::fake('s3');
     $root = legacyFixture();
@@ -91,7 +96,7 @@ it('does not duplicate documents or files when rerun', function (): void {
 it('keeps imported folder ownership within the target organization', function (): void {
     Storage::fake('s3');
     $other = Organization::create(['name' => 'Other Court', 'slug' => 'other-court', 'contact_email' => 'other@example.test']);
-    $foreign = \App\Models\Folder::create(['organization_id' => $other->id, 'name' => 'Judgments']);
+    $foreign = Folder::create(['organization_id' => $other->id, 'name' => 'Judgments']);
     $this->artisan('app:migrate-legacy-documents', ['--legacy-files' => legacyFixture(), '--target-org-slug' => 'default'])->assertSuccessful();
     $document = Document::withoutTenancy()->first();
     expect($document->folder_id)->not->toBe($foreign->id)
@@ -99,12 +104,12 @@ it('keeps imported folder ownership within the target organization', function ()
 });
 
 it('rolls back database writes when storing a legacy document fails', function (): void {
-    $disk = Mockery::mock(\Illuminate\Filesystem\FilesystemAdapter::class);
+    $disk = Mockery::mock(FilesystemAdapter::class);
     $disk->shouldReceive('put')->once()->andReturn(false);
     $disk->shouldReceive('delete')->once()->andReturn(true);
     Storage::shouldReceive('disk')->with('s3')->andReturn($disk);
     $this->artisan('app:migrate-legacy-documents', ['--legacy-files' => legacyFixture(), '--target-org-slug' => 'default'])->assertFailed();
     expect(Document::withoutTenancy()->count())->toBe(0)
-        ->and(\App\Models\User::count())->toBe(0)
-        ->and(\App\Models\Folder::withoutTenancy()->count())->toBe(0);
+        ->and(User::count())->toBe(0)
+        ->and(Folder::withoutTenancy()->count())->toBe(0);
 });
