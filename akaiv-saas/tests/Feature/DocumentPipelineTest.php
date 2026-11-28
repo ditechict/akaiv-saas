@@ -65,5 +65,28 @@ it('marks a deleted document unsearchable when indexing', function (): void {
 
     (new IndexDocumentJob($document))->handle();
 
-    expect(true)->toBeTrue();
+    expect($document->shouldBeSearchable())->toBeFalse();
+});
+
+it('excludes unsafe and unfinished records from search eligibility', function (array $attributes): void {
+    $document = pipelineDocument(array_merge([
+        'status' => 'published', 'virus_scanned' => true, 'virus_found' => false,
+        'ocr_required' => true, 'ocr_completed' => true,
+    ], $attributes));
+    expect($document->shouldBeSearchable())->toBeFalse();
+})->with([
+    [['status' => 'quarantined']],
+    [['virus_scanned' => false]],
+    [['virus_found' => true]],
+    [['ocr_completed' => false]],
+]);
+
+it('removes an ineligible record from its search engine', function (): void {
+    $document = pipelineDocument(['status' => 'quarantined']);
+    $engine = Mockery::mock(\Laravel\Scout\Engines\Engine::class);
+    $engine->shouldReceive('delete')->once()->withArgs(fn ($models) => $models->contains('id', $document->id));
+    $manager = Mockery::mock(\Laravel\Scout\EngineManager::class);
+    $manager->shouldReceive('engine')->andReturn($engine);
+    app()->instance(\Laravel\Scout\EngineManager::class, $manager);
+    (new IndexDocumentJob($document))->handle();
 });
