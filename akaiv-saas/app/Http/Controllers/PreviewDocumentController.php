@@ -13,7 +13,7 @@ class PreviewDocumentController extends Controller
         $this->authorize('view', $document);
 
         abort_if(
-            $document->status === 'deleted' || $document->virus_found || ! $document->virus_scanned,
+            in_array($document->status, ['deleted', 'quarantined', 'uploading'], true) || $document->virus_found || ! $document->virus_scanned,
             404,
         );
 
