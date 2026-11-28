@@ -65,6 +65,9 @@ class User extends Authenticatable
         if ($first) {
             session()->put('active_organization_id', $first->id);
         }
+        if (! $first) {
+            session()->forget('active_organization_id');
+        }
         return $first;
     }
 
