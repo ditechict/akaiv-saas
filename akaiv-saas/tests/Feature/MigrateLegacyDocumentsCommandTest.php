@@ -27,6 +27,8 @@ function legacyFixture(): string
 }
 
 it('does not write documents during a dry run', function (): void {
+    \Illuminate\Support\Facades\Queue::fake();
+    config(['filesystems.default' => 's3']);
     Storage::fake('s3');
     $root = legacyFixture();
 
@@ -36,7 +38,10 @@ it('does not write documents during a dry run', function (): void {
         '--target-org-slug' => 'default',
     ])->assertSuccessful();
 
-    expect(Document::withoutTenancy()->count())->toBe(0);
+    expect(Document::withoutTenancy()->count())->toBe(0)
+        ->and(\App\Models\User::count())->toBe(0)
+        ->and(\App\Models\Folder::withoutTenancy()->count())->toBe(0)
+        ->and(Storage::disk('s3')->allFiles())->toBeEmpty();
 });
 
 it('skips PHP executable files and imports documents', function (): void {
@@ -52,7 +57,7 @@ it('skips PHP executable files and imports documents', function (): void {
 
     expect($documents)->toHaveCount(1)
         ->and($documents->first()->original_filename)->toContain('Judgment.txt')
-        ->and($documents->first()->status)->toBe('published');
+        ->and($documents->first()->status)->toBe('uploading');
 });
 
 it('parses the embedded timestamp into created_at', function (): void {
@@ -67,4 +72,16 @@ it('parses the embedded timestamp into created_at', function (): void {
     $document = Document::withoutTenancy()->first();
 
     expect($document->created_at->format('Y-m-d'))->toBe('2021-01-23');
+});
+
+it('does not duplicate documents or files when rerun', function (): void {
+    \Illuminate\Support\Facades\Queue::fake();
+    config(['filesystems.default' => 's3']);
+    Storage::fake('s3');
+    $root = legacyFixture();
+    $options = ['--legacy-files' => $root, '--target-org-slug' => 'default'];
+    $this->artisan('app:migrate-legacy-documents', $options)->assertSuccessful();
+    $this->artisan('app:migrate-legacy-documents', $options)->assertSuccessful();
+    expect(Document::withoutTenancy()->count())->toBe(1)
+        ->and(Storage::disk('s3')->allFiles())->toHaveCount(1);
 });
