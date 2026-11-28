@@ -79,6 +79,9 @@ jobs:
         run: |
           set -euo pipefail
           vendor/bin/pest --colors=never --log-junit runtime-verification.xml | tee runtime-verification.log
+      - name: Show import failure diagnostics
+        if: failure()
+        run: find storage/logs -name 'migration-failures-*.csv' -exec cat {} +
       - name: Preserve verification results
         if: always()
         uses: actions/upload-artifact@v4
