@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Storage;
 uses(Tests\TestCase::class, RefreshDatabase::class);
 
 beforeEach(function (): void {
+    \Illuminate\Support\Facades\Queue::fake();
+    config(['filesystems.default' => 's3']);
     Organization::create([
         'name' => 'Default Court',
         'slug' => 'default',
