@@ -21,7 +21,11 @@ class IndexDocumentJob implements ShouldQueue
 
     public function handle(): void
     {
-        $this->document = $this->document->fresh();
+        $document = $this->document->fresh();
+        if (! $document) {
+            return;
+        }
+        $this->document = $document;
         if (! $this->document) {
             return;
         }
