@@ -24,6 +24,10 @@ class VirusScanDocumentJob implements ShouldQueue
 
     public function handle(): void
     {
+        $this->document = $this->document->fresh();
+        if (! $this->document || $this->document->status === 'deleted') {
+            return;
+        }
         $path = $this->document->storage_path;
         $disk = Storage::disk($this->document->storage_disk);
 
@@ -69,6 +73,7 @@ class VirusScanDocumentJob implements ShouldQueue
             report($e);
             $this->document->updateQuietly([
                 'status' => 'quarantined',
+                'virus_scanned' => false,
             ]);
             $this->release(300);
             return;
@@ -85,8 +90,10 @@ class VirusScanDocumentJob implements ShouldQueue
             'status' => $this->document->status === 'uploading' ? 'published' : $this->document->status,
         ]);
 
-        OcrDocumentJob::dispatch($this->document)->delay(now()->addSeconds(3));
-        ThumbnailDocumentJob::dispatch($this->document)->delay(now()->addSeconds(5));
-        IndexDocumentJob::dispatch($this->document)->delay(now()->addSeconds(10));
+        \Illuminate\Support\Facades\Bus::chain([
+            new OcrDocumentJob($this->document),
+            new ThumbnailDocumentJob($this->document),
+            new IndexDocumentJob($this->document),
+        ])->dispatch();
     }
 }
