@@ -203,16 +203,7 @@ class Document extends Model implements HasMedia
 
     public function isViewableBy(User $user): bool
     {
-        if ($user->hasRole('Platform SuperAdmin')) {
-            return true;
-        }
-        $activeOrg = session('active_organization_id');
-        if ($activeOrg === null || (int)$this->organization_id !== (int)$activeOrg) {
-            return false;
-        }
-        return $user->hasPermissionTo('document.view')
-            || (int)$this->owner_id === (int)$user->id
-            || $user->hasPermissionTo('document.view_any');
+        return $user->can('view', $this);
     }
 
     public function getRouteKeyName(): string
