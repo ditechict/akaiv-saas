@@ -16,7 +16,7 @@ beforeEach(function (): void {
     Queue::fake();
 });
 
-it('serves a scanned private document through a valid signed preview URL', function (): void {
+it('enforces processing status for a signed private preview', function (string $status, int $expected): void {
     Storage::fake('private');
     $organization = Organization::create([
         'name' => 'Preview Court',
@@ -38,7 +38,7 @@ it('serves a scanned private document through a valid signed preview URL', funct
         'storage_disk' => 'private',
         'storage_path' => 'documents/judgment.txt',
         'mime_type' => 'text/plain',
-        'status' => 'published',
+        'status' => $status,
         'virus_scanned' => true,
     ]);
     Storage::disk('private')->put($document->storage_path, 'confidential judgment');
@@ -49,10 +49,13 @@ it('serves a scanned private document through a valid signed preview URL', funct
         URL::temporarySignedRoute('documents.preview', now()->addMinute(), ['document' => $document->uuid]),
     );
 
-    $response->assertOk()
-        ->assertHeader('Content-Type', 'text/plain; charset=utf-8')
+    $response->assertStatus($expected);
+    if ($expected !== 200) {
+        return;
+    }
+    $response->assertHeader('Content-Type', 'text/plain; charset=utf-8')
         ->assertStreamedContent('confidential judgment');
-});
+})->with([['published', 200], ['quarantined', 404], ['uploading', 404]]);
 
 it('rejects an invalid preview signature', function (): void {
     $organization = Organization::create([
