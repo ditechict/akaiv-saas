@@ -2,15 +2,15 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Document as NewDocument;
+use App\Models\Folder as NewFolder;
+use App\Models\Organization;
+use App\Models\User as NewUser;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use App\Models\Organization;
-use App\Models\Document as NewDocument;
-use App\Models\Folder as NewFolder;
-use App\Models\User as NewUser;
 use Illuminate\Support\Str;
-use Carbon\Carbon;
 
 class MigrateLegacyDocumentsCommand extends Command
 {
@@ -33,7 +33,7 @@ class MigrateLegacyDocumentsCommand extends Command
         $migrated = 0;
         $total = 0;
 
-        $this->info("Starting migration" . ($dry ? ' (DRY RUN)' : '') . " for org: {$org->name}");
+        $this->info('Starting migration'.($dry ? ' (DRY RUN)' : '')." for org: {$org->name}");
         $this->info("Legacy files at: {$legacyRoot}");
 
         try {
@@ -49,7 +49,8 @@ class MigrateLegacyDocumentsCommand extends Command
                 continue;
             }
             if (in_array(strtolower($file->getExtension()), ['php', 'phtml', 'phar'], true)) {
-                $failures->push((string)$file . ' | skipped: PHP executable');
+                $failures->push((string) $file.' | skipped: PHP executable');
+
                 continue;
             }
 
@@ -60,7 +61,7 @@ class MigrateLegacyDocumentsCommand extends Command
 
             $total++;
 
-            $relPath = Str::after(str_replace('\\', '/', $file->getPathname()), $legacyRoot . '/');
+            $relPath = Str::after(str_replace('\\', '/', $file->getPathname()), $legacyRoot.'/');
             $parts = explode('/', $relPath);
             $legacyUsername = urldecode($parts[0] ?? 'UNKNOWN');
             $legacyFolderName = isset($parts[2]) ? urldecode($parts[1] ?? 'General') : null;
@@ -70,11 +71,15 @@ class MigrateLegacyDocumentsCommand extends Command
             $cleanName = $legacyFilename;
             if (preg_match('/^(\d{4}-\d{2}-\d{2})_(\d{2})_(\d{2})_(\d{2})_(.*)\.([a-zA-Z0-9]+)$/', $legacyFilename, $m)) {
                 $timestamp = Carbon::parse("{$m[1]} {$m[2]}:{$m[3]}:{$m[4]}");
-                $cleanName = str_replace('_', ' ', $m[5]) . '.' . $m[6];
+                $cleanName = str_replace('_', ' ', $m[5]).'.'.$m[6];
             }
 
-            $user = $this->matchUserByName($pdo, $legacyUsername);
-            $folder = $legacyFolderName ? $this->findOrCreateFolder($org, $user, $legacyFolderName, $dry) : null;
+            if ($dry) {
+                $this->line('[DRY] '.$relPath);
+                $migrated++;
+
+                continue;
+            }
 
             $this->line(sprintf(
                 '  %-3s %-50s owner=%-25s folder=%s',
@@ -84,21 +89,28 @@ class MigrateLegacyDocumentsCommand extends Command
                 $legacyFolderName ?? '(none)'
             ));
 
-            if ($dry) {
-                $migrated++;
-                continue;
-            }
-
+            $disk = null;
+            $newKey = null;
+            $transactionLevel = DB::transactionLevel();
             try {
-                $uuid = Str::uuid();
-                $ext = $file->getExtension();
-                $newKey = "org_{$org->id}/docs/{$uuid}/{$uuid}." . strtolower($ext);
-                $disk = Storage::disk(config('filesystems.default'));
-                $disk->put($newKey, file_get_contents($file->getPathname()), 'private');
+                DB::beginTransaction();
+                Organization::whereKey($org->id)->lockForUpdate()->firstOrFail();
                 $sha = hash_file('sha256', $file->getPathname());
-                $dup = NewDocument::where('organization_id', $org->id)->where('sha256_checksum', $sha)->first();
+                if (NewDocument::where('organization_id', $org->id)->where('sha256_checksum', $sha)->exists()) {
+                    DB::rollBack();
 
-                NewDocument::create([
+                    continue;
+                }
+                $user = $this->matchUserByName($pdo, $legacyUsername);
+                $folder = $legacyFolderName ? $this->findOrCreateFolder($org, $user, $legacyFolderName, false) : null;
+                $uuid = (string) Str::uuid();
+                $ext = $file->getExtension();
+                $newKey = "org_{$org->id}/docs/{$uuid}/{$uuid}.".strtolower($ext);
+                $disk = Storage::disk(config('filesystems.default'));
+                if (! $disk->put($newKey, file_get_contents($file->getPathname()), 'private')) {
+                    throw new \RuntimeException('Failed to store imported document.');
+                }
+                $document = new NewDocument([
                     'uuid' => $uuid,
                     'organization_id' => $org->id,
                     'folder_id' => $folder?->id,
@@ -106,7 +118,7 @@ class MigrateLegacyDocumentsCommand extends Command
                     'uploaded_by' => $user?->id,
                     'friendly_name' => pathinfo($cleanName, PATHINFO_FILENAME),
                     'original_filename' => $legacyFilename,
-                    'slug' => Str::slug(pathinfo($cleanName, PATHINFO_FILENAME)) . '-' . substr($uuid, 0, 8),
+                    'slug' => Str::slug(pathinfo($cleanName, PATHINFO_FILENAME)).'-'.substr($uuid, 0, 8),
                     'storage_disk' => config('filesystems.default'),
                     'storage_path' => $newKey,
                     'size_bytes' => $file->getSize(),
@@ -114,16 +126,24 @@ class MigrateLegacyDocumentsCommand extends Command
                     'file_extension' => strtolower($ext),
                     'sha256_checksum' => $sha,
                     'folio_number' => null,
-                    'description' => 'Migrated from legacy app on ' . now()->toIso8601String() . '. Legacy path: ' . $relPath,
-                    'status' => 'published',
+                    'description' => 'Migrated from legacy app on '.now()->toIso8601String().'. Legacy path: '.$relPath,
+                    'status' => 'uploading',
                     'virus_scanned' => false,
-                    'created_at' => $timestamp ?? $file->getCTime(),
-                    'updated_at' => $file->getMTime(),
                 ]);
+                $document->setCreatedAt($timestamp ?? Carbon::createFromTimestamp($file->getCTime()));
+                $document->setUpdatedAt(Carbon::createFromTimestamp($file->getMTime()));
+                $document->save();
+                DB::commit();
 
                 $migrated++;
             } catch (\Throwable $e) {
-                $failures->push($relPath . ' | ' . $e->getMessage());
+                if (DB::transactionLevel() > $transactionLevel) {
+                    DB::rollBack();
+                }
+                if ($disk && $newKey && ! NewDocument::withoutTenancy()->where('storage_path', $newKey)->exists()) {
+                    $disk->delete($newKey);
+                }
+                $failures->push($relPath.' | '.$e->getMessage());
                 report($e);
             }
         }
@@ -131,11 +151,13 @@ class MigrateLegacyDocumentsCommand extends Command
         $this->newLine(2);
         $this->info("Scan complete: {$migrated}/{$total} migrated successfully.");
         if ($failures->isNotEmpty()) {
-            $outPath = storage_path('logs/migration-failures-' . now()->format('Ymd-His') . '.csv');
-            $failures->each(fn($l) => file_put_contents($outPath, $l . PHP_EOL, FILE_APPEND));
+            $outPath = storage_path('logs/migration-failures-'.now()->format('Ymd-His').'.csv');
+            $failures->each(fn ($l) => file_put_contents($outPath, $l.PHP_EOL, FILE_APPEND));
             $this->warn("Failures: {$failures->count()}. Report: {$outPath}");
         }
-        return self::SUCCESS;
+
+        return $failures->contains(fn ($failure) => ! str_contains($failure, 'skipped: PHP executable'))
+            ? self::FAILURE : self::SUCCESS;
     }
 
     private function matchUserByName(?\PDO $pdo, string $legacyUsername): ?NewUser
@@ -146,22 +168,19 @@ class MigrateLegacyDocumentsCommand extends Command
                 ['email' => 'balo.dipo@gmail.com'],
                 [
                     'name' => 'Dipo',
-                    'surname' => 'Balogun',
-                    'password' => '$2y$10$9X.placeholder',
-                    'role_on_legacy' => 'admin',
+                    'password' => Str::random(64),
                 ]
             );
         }
 
         if (! $pdo) {
             $slugName = Str::slug($legacyUsername);
+
             return NewUser::firstOrCreate(
                 ['email' => "{$slugName}@legacy.internal"],
                 [
                     'name' => $legacyUsername,
-                    'surname' => '',
-                    'password' => '$2y$10$9X.placeholder',
-                    'role_on_legacy' => 'user',
+                    'password' => Str::random(64),
                 ]
             );
         }
@@ -174,23 +193,21 @@ class MigrateLegacyDocumentsCommand extends Command
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
         if (! $row) {
             $slugName = Str::slug($legacyUsername);
+
             return NewUser::firstOrCreate(
                 ['email' => "{$slugName}@legacy.internal"],
                 [
                     'name' => $legacyUsername,
-                    'surname' => '',
-                    'password' => '$2y$10$9X.placeholder',
-                    'role_on_legacy' => 'user',
+                    'password' => Str::random(64),
                 ]
             );
         }
+
         return NewUser::firstOrCreate(
             ['email' => $row['email']],
             [
                 'name' => $row['name'],
-                'surname' => $row['surname'],
-                'password' => '$2y$10$9X.placeholder',
-                'role_on_legacy' => $row['role'],
+                'password' => Str::random(64),
             ]
         );
     }
@@ -198,9 +215,7 @@ class MigrateLegacyDocumentsCommand extends Command
     private function findOrCreateFolder(Organization $org, ?NewUser $user, string $name, bool $dry): ?NewFolder
     {
         $base = NewFolder::where('organization_id', $org->id)->where('name', $name);
-        if ($user) {
-            $base = $base->orWhereNull('parent_folder_id');
-        }
+        $base->whereNull('parent_folder_id');
         $existing = $base->first();
         if ($existing) {
             return $existing;
@@ -208,6 +223,7 @@ class MigrateLegacyDocumentsCommand extends Command
         if ($dry) {
             return null;
         }
+
         return NewFolder::create([
             'organization_id' => $org->id,
             'name' => $name,

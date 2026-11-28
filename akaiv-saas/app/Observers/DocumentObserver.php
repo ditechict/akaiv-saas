@@ -9,6 +9,6 @@ class DocumentObserver
 {
     public function created(Document $document): void
     {
-        VirusScanDocumentJob::dispatch($document);
+        VirusScanDocumentJob::dispatch($document)->afterCommit();
     }
 }

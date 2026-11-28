@@ -7,9 +7,13 @@ use App\Jobs\VirusScanDocumentJob;
 use App\Models\Document;
 use App\Models\Organization;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Scout\EngineManager;
+use Laravel\Scout\Engines\Engine;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class);
 
 function pipelineDocument(array $attributes = []): Document
 {
@@ -65,5 +69,41 @@ it('marks a deleted document unsearchable when indexing', function (): void {
 
     (new IndexDocumentJob($document))->handle();
 
-    expect(true)->toBeTrue();
+    expect($document->shouldBeSearchable())->toBeFalse();
+});
+
+it('excludes unsafe and unfinished records from search eligibility', function (array $attributes): void {
+    $document = pipelineDocument(array_merge([
+        'status' => 'published', 'virus_scanned' => true, 'virus_found' => false,
+        'ocr_required' => true, 'ocr_completed' => true,
+    ], $attributes));
+    expect($document->shouldBeSearchable())->toBeFalse();
+})->with([
+    [['status' => 'quarantined']],
+    [['virus_scanned' => false]],
+    [['virus_found' => true]],
+    [['ocr_completed' => false]],
+]);
+
+it('removes an ineligible record from its search engine', function (): void {
+    $document = pipelineDocument(['status' => 'quarantined']);
+    $engine = Mockery::mock(Engine::class);
+    $engine->shouldReceive('delete')->once()->withArgs(fn ($models) => $models->contains('id', $document->id));
+    $manager = Mockery::mock(EngineManager::class);
+    $manager->shouldReceive('engine')->andReturn($engine);
+    app()->instance(EngineManager::class, $manager);
+    (new IndexDocumentJob($document))->handle();
+});
+
+it('extracts native text documents without invoking image OCR', function (): void {
+    Queue::fake();
+    Storage::fake('private');
+    $document = pipelineDocument([
+        'status' => 'published', 'virus_scanned' => true, 'ocr_required' => true,
+        'file_extension' => 'txt', 'mime_type' => 'text/plain',
+    ]);
+    Storage::disk('private')->put($document->storage_path, 'Native legal record');
+    (new OcrDocumentJob($document))->handle();
+    expect($document->fresh()->extracted_text)->toBe('Native legal record')
+        ->and($document->fresh()->ocr_completed)->toBeTrue();
 });

@@ -14,6 +14,8 @@ class OrganizationScope implements Scope
             $organizationId = $this->resolveOrganizationId();
             if ($organizationId !== null) {
                 $builder->where($model->qualifyColumn('organization_id'), $organizationId);
+            } elseif (auth()->check()) {
+                $builder->whereRaw('1 = 0');
             }
         }
     }
@@ -32,16 +34,6 @@ class OrganizationScope implements Scope
             return null;
         }
 
-        if (session()->has('active_organization_id')) {
-            return (int) session('active_organization_id');
-        }
-
-        $firstMembership = $user->organizations()->first();
-        if ($firstMembership) {
-            session()->put('active_organization_id', $firstMembership->id);
-            return (int) $firstMembership->id;
-        }
-
-        return null;
+        return $user->currentOrganization()?->id;
     }
 }

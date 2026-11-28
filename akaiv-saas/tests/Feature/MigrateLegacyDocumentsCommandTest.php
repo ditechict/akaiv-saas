@@ -1,13 +1,20 @@
 <?php
 
 use App\Models\Document;
+use App\Models\Folder;
 use App\Models\Organization;
+use App\Models\User;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function (): void {
+    Queue::fake();
+    config(['filesystems.default' => 's3']);
     Organization::create([
         'name' => 'Default Court',
         'slug' => 'default',
@@ -27,6 +34,8 @@ function legacyFixture(): string
 }
 
 it('does not write documents during a dry run', function (): void {
+    Queue::fake();
+    config(['filesystems.default' => 's3']);
     Storage::fake('s3');
     $root = legacyFixture();
 
@@ -36,7 +45,10 @@ it('does not write documents during a dry run', function (): void {
         '--target-org-slug' => 'default',
     ])->assertSuccessful();
 
-    expect(Document::withoutTenancy()->count())->toBe(0);
+    expect(Document::withoutTenancy()->count())->toBe(0)
+        ->and(User::count())->toBe(0)
+        ->and(Folder::withoutTenancy()->count())->toBe(0)
+        ->and(Storage::disk('s3')->allFiles())->toBeEmpty();
 });
 
 it('skips PHP executable files and imports documents', function (): void {
@@ -52,7 +64,7 @@ it('skips PHP executable files and imports documents', function (): void {
 
     expect($documents)->toHaveCount(1)
         ->and($documents->first()->original_filename)->toContain('Judgment.txt')
-        ->and($documents->first()->status)->toBe('published');
+        ->and($documents->first()->status)->toBe('uploading');
 });
 
 it('parses the embedded timestamp into created_at', function (): void {
@@ -67,4 +79,37 @@ it('parses the embedded timestamp into created_at', function (): void {
     $document = Document::withoutTenancy()->first();
 
     expect($document->created_at->format('Y-m-d'))->toBe('2021-01-23');
+});
+
+it('does not duplicate documents or files when rerun', function (): void {
+    Queue::fake();
+    config(['filesystems.default' => 's3']);
+    Storage::fake('s3');
+    $root = legacyFixture();
+    $options = ['--legacy-files' => $root, '--target-org-slug' => 'default'];
+    $this->artisan('app:migrate-legacy-documents', $options)->assertSuccessful();
+    $this->artisan('app:migrate-legacy-documents', $options)->assertSuccessful();
+    expect(Document::withoutTenancy()->count())->toBe(1)
+        ->and(Storage::disk('s3')->allFiles())->toHaveCount(1);
+});
+
+it('keeps imported folder ownership within the target organization', function (): void {
+    Storage::fake('s3');
+    $other = Organization::create(['name' => 'Other Court', 'slug' => 'other-court', 'contact_email' => 'other@example.test']);
+    $foreign = Folder::create(['organization_id' => $other->id, 'name' => 'Judgments']);
+    $this->artisan('app:migrate-legacy-documents', ['--legacy-files' => legacyFixture(), '--target-org-slug' => 'default'])->assertSuccessful();
+    $document = Document::withoutTenancy()->first();
+    expect($document->folder_id)->not->toBe($foreign->id)
+        ->and($document->folder->organization_id)->toBe($document->organization_id);
+});
+
+it('rolls back database writes when storing a legacy document fails', function (): void {
+    $disk = Mockery::mock(FilesystemAdapter::class);
+    $disk->shouldReceive('put')->once()->andReturn(false);
+    $disk->shouldReceive('delete')->once()->andReturn(true);
+    Storage::shouldReceive('disk')->with('s3')->andReturn($disk);
+    $this->artisan('app:migrate-legacy-documents', ['--legacy-files' => legacyFixture(), '--target-org-slug' => 'default'])->assertFailed();
+    expect(Document::withoutTenancy()->count())->toBe(0)
+        ->and(User::count())->toBe(0)
+        ->and(Folder::withoutTenancy()->count())->toBe(0);
 });
