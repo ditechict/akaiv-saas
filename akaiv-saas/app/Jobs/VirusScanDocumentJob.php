@@ -24,8 +24,12 @@ class VirusScanDocumentJob implements ShouldQueue
 
     public function handle(): void
     {
-        $this->document = $this->document->fresh();
-        if (! $this->document || $this->document->status === 'deleted') {
+        $document = $this->document->fresh();
+        if (! $document) {
+            return;
+        }
+        $this->document = $document;
+        if ($this->document->status === 'deleted') {
             return;
         }
         $path = $this->document->storage_path;
